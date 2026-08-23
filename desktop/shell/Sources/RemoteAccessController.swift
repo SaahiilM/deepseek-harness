@@ -110,6 +110,18 @@ final class RemoteAccessController: NSObject, @unchecked Sendable {
             let pipe = Pipe()
             proc.standardOutput = pipe
             proc.standardError = pipe
+            // Drain both channels into the system log: the gate is where
+            // phone-visible failures surface first (401s, upstream errors),
+            // and an undrained pipe would silently truncate at 64 KiB.
+            [pipe.fileHandleForReading].forEach { handle in
+                handle.readabilityHandler = { fileHandle in
+                    let data = fileHandle.availableData
+                    guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
+                    for line in text.split(separator: "\n") where !line.isEmpty {
+                        NSLog("dsh-desktop gate: %@", String(line))
+                    }
+                }
+            }
 
             do {
                 try proc.run()
@@ -198,7 +210,11 @@ final class RemoteAccessController: NSObject, @unchecked Sendable {
             proc.terminate()
         }
         proc.waitUntilExit()
-        return stdout.fileHandleForReading.readDataToEndOfFile()
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        if proc.terminationStatus != 0, let text = String(data: data, encoding: .utf8), !text.isEmpty {
+            NSLog("dsh-desktop remote-access: tailscale %@ said: %@", arguments[1...].joined(separator: " "), text)
+        }
+        return data
     }
 
     /// Clear the serve entry when the user explicitly disables remote

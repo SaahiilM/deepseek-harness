@@ -84,6 +84,7 @@ const server = http.createServer((req, res) => {
   const candidates = presentedCandidates(req, url)
 
   if (!hasValidPairCode(candidates) && !hasValidSecret(candidates)) {
+    console.log(`${req.method} ${url.pathname}${url.search} -> 401 unpaired`)
     res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
     res.end('DeepSeek Harness: paired device required.\nOpen the pairing QR link to sign in.')
     return
@@ -105,6 +106,7 @@ const server = http.createServer((req, res) => {
   if (hasValidPairCode(candidates)) {
     // Code accepted: set the durable cookie, then strip the code from the URL
     // so it leaves the browser history/address bar.
+    console.log(`${req.method} ${url.pathname} -> 302 paired`)
     grantCookie(res, PAIR_SECRET)
     url.searchParams.delete('pair')
     url.pathname = '/'
@@ -119,6 +121,7 @@ const server = http.createServer((req, res) => {
     headers,
   })
   upstream.on('response', upstreamRes => {
+    console.log(`${req.method} ${url.pathname} -> ${upstreamRes.statusCode ?? '?'} (upstream)`)
     const contentType = String(upstreamRes.headers['content-type'] ?? '')
     if (!contentType.includes('text/html')) {
       res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers)
