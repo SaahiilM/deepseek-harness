@@ -95,8 +95,11 @@ const server = http.createServer((req, res) => {
   // The phone's Host (tailnet name/IP : gate port) fails the harness
   // browser-trust fence, which accepts loopback, LAN-literal, or explicitly
   // trusted authorities. Rewrite to the upstream authority so proxied
-  // requests look like the loopback clients they effectively are.
+  // requests look like the loopback clients they effectively are. The fence
+  // also compares Origin against Host when a browser attaches one — rewrite
+  // it to the same authority or every POST from the phone is refused.
   headers.host = `127.0.0.1:${UPSTREAM_PORT}`
+  if (headers.origin !== undefined) headers.origin = `http://127.0.0.1:${UPSTREAM_PORT}`
 
   if (hasValidPairCode(candidates)) {
     // Code accepted: set the durable cookie, then strip the code from the URL
@@ -135,9 +138,10 @@ server.on('upgrade', (req, socket, head) => {
     return
   }
   // Strip pairing material from the forwarded upgrade request and rewrite
-  // Host to the upstream authority (same fence reasoning as HTTP above).
-  const { cookie: _droppedCookie, authorization: _droppedAuth, host: _droppedHost, ...forwardHeaders } = req.headers
+  // Host/Origin to the upstream authority (same fence reasoning as HTTP).
+  const { cookie: _c, authorization: _a, host: _h, origin: _o, ...forwardHeaders } = req.headers
   forwardHeaders.host = `127.0.0.1:${UPSTREAM_PORT}`
+  forwardHeaders.origin = `http://127.0.0.1:${UPSTREAM_PORT}`
   const upstreamReq = http.request({
     host: '127.0.0.1',
     port: Number(UPSTREAM_PORT),
