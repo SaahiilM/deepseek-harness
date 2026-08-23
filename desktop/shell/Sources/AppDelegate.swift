@@ -46,7 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
     func applicationWillTerminate(_ notification: Notification) {
         sessionMonitor.stop()
         approvalStream.stop()
-        remoteAccess.disable()
+        remoteAccess.disableNow()
         server.stop()
     }
 

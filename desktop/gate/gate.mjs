@@ -74,6 +74,11 @@ const server = http.createServer((req, res) => {
   const headers = { ...req.headers }
   delete headers.cookie            // never leak pairing material upstream
   delete headers.authorization
+  // The phone's Host (tailnet name/IP : gate port) fails the harness
+  // browser-trust fence, which accepts loopback, LAN-literal, or explicitly
+  // trusted authorities. Rewrite to the upstream authority so proxied
+  // requests look like the loopback clients they effectively are.
+  headers.host = `127.0.0.1:${UPSTREAM_PORT}`
 
   if (consumePairCode(presented)) {
     // Code accepted: set the durable cookie, then strip the code from the URL
@@ -111,8 +116,10 @@ server.on('upgrade', (req, socket, head) => {
     socket.destroy()
     return
   }
-  // Strip pairing material from the forwarded upgrade request.
-  const { cookie: _droppedCookie, authorization: _droppedAuth, ...forwardHeaders } = req.headers
+  // Strip pairing material from the forwarded upgrade request and rewrite
+  // Host to the upstream authority (same fence reasoning as HTTP above).
+  const { cookie: _droppedCookie, authorization: _droppedAuth, host: _droppedHost, ...forwardHeaders } = req.headers
+  forwardHeaders.host = `127.0.0.1:${UPSTREAM_PORT}`
   const upstreamReq = http.request({
     host: '127.0.0.1',
     port: Number(UPSTREAM_PORT),

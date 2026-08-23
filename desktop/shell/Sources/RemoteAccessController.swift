@@ -123,6 +123,12 @@ final class RemoteAccessController: NSObject, @unchecked Sendable {
         queue.async { [weak self] in self?.stopSync() }
     }
 
+    /// Synchronous teardown for applicationWillTerminate: an async dispatch
+    /// there races process exit and leaks the gate process.
+    func disableNow() {
+        queue.sync { stopSync() }
+    }
+
     private func stopSync() {
         if let proc = process, proc.isRunning {
             proc.terminate()
