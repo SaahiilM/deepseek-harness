@@ -39,6 +39,36 @@ The Codex-like app is therefore a **native macOS shell** around that server:
 | 7 | Node discovery scans nvm version dirs and validates engines (^22.19 \|\| >=24) by executing `--version` | A stale `/usr/local/bin/node` (v16) silently broke the source launch; presence on disk proves nothing, only a successful run does | 2026-08-23 |
 | 8 | Bootstrap uses explicit `static func main()` (not bare `@main` delegation) | `@main` on NSApplicationDelegate compiles but never installs the delegate without nib/principal-class wiring — app ran with no window and no error | 2026-08-23 |
 
+## Reference-product patterns (studied 2026-08-23)
+
+Sources actually inspected (after the first session's web-search tool lacked an
+API key): cloned `pingdotgg/t3code` and `get-bb/bb` to `../research/`, and
+dissected the locally installed `/Applications/bb.app` (Electron, bundle id
+`dev.bb.desktop`). Key structural finding: **both references are a local server
+plus web UI plus a thin native desktop wrapper** — the same shape as DSH's web
+GUI + our shell, so the architecture is validated rather than changed.
+
+Patterns adopted from them in round 2:
+| Pattern | Source | Our implementation |
+|---|---|---|
+| Single instance; relaunch activates existing | bb `main.ts` `requestSingleInstanceLock` | `activateExistingInstanceIfAny()` in `static main()` |
+| Window state persistence | bb `window-state.ts` | AppKit `setFrameAutosaveName("MainWindow")` |
+| Full Edit-menu roles (copy/paste in webview) | bb `menu.ts` | native Edit menu |
+| Zoom In/Out/Actual Size | bb View menu | `webView.pageZoom` actions |
+| File ▸ New Window (multi-window) | bb | window registry + `makeWindowController()` |
+| Connecting splash while backend down; dock click re-reveals | t3code `DesktopWindow.ts` | starting page + `applicationShouldHandleReopen` |
+| Live agent presence outside the webview (badge/notifications) | Codex desktop | `SessionMonitor` polls `POST /api/session.list` |
+| Dock icon ownership, log viewer menu | t3code / bb | icns + Server ▸ Reveal Server Log |
+
+Deliberately not copied: Electron runtime (ours is a ~200 KB universal Swift
+binary vs bb's ~200 MB asar bundle); auto-update feed (needs release infra —
+deferred); remote/mobile control planes (DSH web profile already serves LAN
+via `--trusted-host`).
+
+Session-presence semantics: `running` in `session.list` is per-host live state,
+so the badge/notifications track agents launched through the app's own server —
+the correct Codex-like scope.
+
 ## Current state
 
 - [x] Branch `desktop-app` created off `master` (== origin/master).
@@ -53,6 +83,10 @@ The Codex-like app is therefore a **native macOS shell** around that server:
       universal .app); relaunched and re-verified after the rebuild.
 - [x] Optional `install-sync-timer.sh` (LaunchAgent, opt-in) for automatic daily
       upstream syncs with outcomes appended to `agent-memory/sync-log.md`.
+- [x] Round 2 (reference-parity): single-instance, window-state persistence,
+      Edit/zoom menus, New Window, SessionMonitor (dock badge + finish
+      notifications + dock-bounce fallback), DMG packaging (`make-dmg.sh`) —
+      all verified live in bundled mode.
 
 ## How to build & run
 
@@ -78,7 +112,10 @@ desktop/scripts/sync-origin.sh --check  # only report drift, change nothing
 ## Open questions / next steps
 
 1. **Self-contained bundle**: ship Node + the built workspace inside the .app so it
-   runs on machines without this checkout (v2). Needs a size/perf budget decision.
-2. Dock badge / menu-bar extra showing agent activity (Codex-like presence).
-3. Native notifications when a task finishes or needs approval.
-4. DMG packaging script for distribution.
+   runs on machines without this checkout. Needs a size/perf budget decision.
+2. **Approval-needed signal**: `session.list` exposes only `running`; surfacing
+   "waiting for approval" requires consuming the `/api/events.mux` stream.
+3. **Auto-update feed** and Developer ID signing/notarization for distribution.
+4. Notification permission is denied for ad-hoc-signed builds by TCC; dock bounce
+   covers it. Real notifications need Developer ID signing or user approval in
+   System Settings ▸ Notifications.

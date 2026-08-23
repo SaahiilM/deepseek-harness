@@ -1,16 +1,21 @@
-// WindowController — the main window: one WKWebView hosting the DSH Web GUI,
-// plus placeholder and error pages for the server startup lifecycle.
+// WindowController — one WKWebView window hosting the DSH Web GUI, plus
+// placeholder and error pages for the server startup lifecycle.
 //
-// Navigation policy: loopback origins load inside the window; anything else
-// (a link out to docs, GitHub, …) opens in the default browser. This keeps a
-// desktop-app sandbox around the harness UI without breaking external links.
+// Patterns adopted from the reference products:
+//   - persisted window frame across launches (bb's window-state.json, done
+//     here with AppKit's native setFrameAutosaveName)
+//   - browser-like zoom controls wired into the View menu
+//   - navigation policy: loopback origins load inside the window; anything
+//     else opens in the default browser
 
 import AppKit
 import WebKit
 
-final class WindowController: NSWindowController, WKNavigationDelegate {
+final class WindowController: NSWindowController, WKNavigationDelegate, NSWindowDelegate {
 
     private var webView: WKWebView!
+    /// Invoked when the user closes this window so the owner can forget it.
+    var onClose: (() -> Void)?
 
     convenience init() {
         let window = NSWindow(
@@ -33,23 +38,36 @@ final class WindowController: NSWindowController, WKNavigationDelegate {
         self.init(window: window)
         webView = web
         webView.navigationDelegate = self
+        window.delegate = self
+        // Restore last session's frame (bb pattern, AppKit-native form).
+        window.setFrameAutosaveName("MainWindow")
         window.center()
     }
 
-    var canReload: Bool { webView.url != nil }
+    /// True while the window shows a starting/error page rather than the app
+    /// UI; such windows follow server lifecycle transitions.
+    private(set) var showingLifecyclePage = true
 
-    func reload() {
+    // MARK: - Navigation actions (menu targets)
+
+    func reloadPage() {
         guard let url = webView.url else { return }
         webView.load(URLRequest(url: url))
     }
 
-    func loadApp(_ url: URL) {
-        webView.load(URLRequest(url: url))
-    }
+    func zoomIn() { webView.pageZoom = min(webView.pageZoom + 0.1, 3.0) }
+    func zoomOut() { webView.pageZoom = max(webView.pageZoom - 0.1, 0.5) }
+    func resetZoom() { webView.pageZoom = 1.0 }
 
     // MARK: - Lifecycle pages
 
+    func loadApp(_ url: URL) {
+        showingLifecyclePage = false
+        webView.load(URLRequest(url: url))
+    }
+
     func showStartingPage() {
+        showingLifecyclePage = true
         loadHTML(page(title: "Starting DeepSeek Harness…",
                       body: """
                       <div class="spinner"></div>
@@ -59,6 +77,7 @@ final class WindowController: NSWindowController, WKNavigationDelegate {
     }
 
     func showErrorPage(reason: String, logTail: [String]) {
+        showingLifecyclePage = true
         let escapedLog = logTail.suffix(60)
             .map { $0.replacingOccurrences(of: "<", with: "&lt;") }
             .joined(separator: "\n")
@@ -95,6 +114,12 @@ final class WindowController: NSWindowController, WKNavigationDelegate {
           @keyframes spin { to { transform: rotate(360deg); } }
         </style></head><body><main><h1>\(title)</h1>\(body)</main></body></html>
         """
+    }
+
+    // MARK: - NSWindowDelegate
+
+    func windowWillClose(_ notification: Notification) {
+        onClose?()
     }
 
     // MARK: - WKNavigationDelegate

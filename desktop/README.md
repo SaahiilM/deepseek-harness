@@ -44,6 +44,28 @@ Requirements: Node ^22.19 || >=24 · pnpm 11 · Xcode command line tools (`swift
 4. Quitting the app SIGTERMs the server. Server output lands in
    `~/Library/Application Support/DeepSeek Harness/server.log`.
 
+## Desktop affordances (Codex/bb/t3code patterns)
+
+- **Single instance** — launching a second copy activates the running app.
+- **Session presence** — a `SessionMonitor` polls `POST /api/session.list`
+  every 3s: the dock badge shows how many agents are running, and finishing an
+  agent while the app is in the background posts a notification (plus a dock
+  bounce when notifications are unavailable).
+- **Multi-window** — File ▸ New Window (⌘N) opens another view onto the same
+  local server; window frames persist across launches.
+- **Native menus** — Edit roles make undo/copy/paste work inside the webview;
+  View has Reload and Zoom In/Out/Actual Size; Server has Restart/Open in
+  Browser/Copy URL/Reveal Log.
+
+## Distribution
+
+```sh
+desktop/scripts/make-dmg.sh     # dist/"DeepSeek Harness.dmg"
+```
+
+The DMG is ad-hoc signed: other machines see a Gatekeeper warning until you
+sign with a Developer ID and notarize (commands printed by the script).
+
 ## Staying current with upstream
 
 The branch tracks `origin/master`; everything it owns lives in `desktop/`, so

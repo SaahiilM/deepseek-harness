@@ -64,8 +64,9 @@ SOURCES=(
   "$DESKTOP_DIR/shell/Sources/AppDelegate.swift"
   "$DESKTOP_DIR/shell/Sources/ServerController.swift"
   "$DESKTOP_DIR/shell/Sources/WindowController.swift"
+  "$DESKTOP_DIR/shell/Sources/SessionMonitor.swift"
 )
-FRAMEWORKS=(-framework AppKit -framework WebKit -framework Network)
+FRAMEWORKS=(-framework AppKit -framework WebKit -framework Network -framework UserNotifications)
 
 # swiftc accepts one -target per invocation, so each architecture is compiled
 # separately and merged with lipo. Both slices come from the same universal SDK.
