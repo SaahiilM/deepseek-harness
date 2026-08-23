@@ -145,7 +145,13 @@ final class ServerController: NSObject, @unchecked Sendable {
 
         let args = ["--import", "tsx/esm",
                     RepoLocator.markerPath, "web",
-                    "--no-open", "--port", String(pickedPort)]
+                    "--no-open", "--port", String(pickedPort),
+                    // The shell serves both this Mac's browser and paired
+                    // phones over the gate; the OS-dialog interaction can
+                    // only ever answer the local surface, so pin the in-app
+                    // host-filesystem browser for workspace creation on
+                    // every surface.
+                    "--directory-picker", "browse"]
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: node)
