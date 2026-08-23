@@ -1,0 +1,5 @@
+# Build outputs of desktop/scripts/build.sh
+dist/
+
+# Icon generation cache
+*.icns.tmp/
