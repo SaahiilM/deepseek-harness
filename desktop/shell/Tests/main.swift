@@ -232,6 +232,31 @@ func testEmbeddedRuntimePriority() {
                 "embedded: missing repo-local node yields nil")
 }
 
+// MARK: - Remote access helpers
+
+func testRemoteAccessHelpers() {
+    let secret = RemoteAccessController.randomHex(byteCount: 24)
+    expectTrue(secret.count == 48 && secret.allSatisfy(\.isHexDigit),
+               "remote: secret is 48 hex chars")
+    expectTrue(RemoteAccessController.randomHex(byteCount: 24) != secret,
+               "remote: secrets do not repeat")
+
+    let url = RemoteAccessController.pairingCodeURL(
+        lanAddress: "192.168.1.20", gatePort: 52390, code: "a1b2c3d4")
+    expectTrue(url?.absoluteString == "http://192.168.1.20:52390/pair/a1b2c3d4",
+               "remote: pairing URL carries code path")
+}
+
+func testLanAddressFiltering() {
+    expectTrue(LanAddress.isPreferredInterface("en0"), "lan: en0 is preferred")
+    expectTrue(LanAddress.isPreferredInterface("bridge0"), "lan: bridge is preferred")
+    expectTrue(!LanAddress.isPreferredInterface("en0p2s4") && !LanAddress.isIgnoredInterface("en0"),
+               "lan: malformed hardware names rejected")
+    for ignored in ["lo0", "utun3", "awdl0", "llw0", "apfw0"] {
+        expectTrue(LanAddress.isIgnoredInterface(ignored), "lan: \(ignored) ignored")
+    }
+}
+
 // MARK: - Run
 
 testSessionListWire()
@@ -242,6 +267,8 @@ testRepoMarkerRules()
 testServerProbeFingerprint()
 testApprovalStreamParsing()
 testEmbeddedRuntimePriority()
+testRemoteAccessHelpers()
+testLanAddressFiltering()
 
 print("")
 if failures > 0 {

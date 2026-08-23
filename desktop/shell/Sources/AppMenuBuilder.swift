@@ -17,6 +17,8 @@ import AppKit
     func openInBrowser(_ sender: Any?)
     func copyServerURL(_ sender: Any?)
     func revealServerLog(_ sender: Any?)
+    @objc optional func toggleRemoteAccess(_ sender: Any?)
+    @objc optional func showPairingWindow(_ sender: Any?)
 }
 
 enum AppMenuBuilder {
@@ -94,6 +96,11 @@ enum AppMenuBuilder {
         serverMenu.addItem(.separator())
         serverMenu.addItem(withTitle: "Reveal Server Log", action: #selector(MenuActions.revealServerLog(_:)),
                            keyEquivalent: "")
+        serverMenu.addItem(.separator())
+        serverMenu.addItem(withTitle: "Enable Remote Access (LAN)",
+                           action: #selector(MenuActions.toggleRemoteAccess(_:)), keyEquivalent: "").tag = 900
+        serverMenu.addItem(withTitle: "Pair Mobile Device…",
+                           action: #selector(MenuActions.showPairingWindow(_:)), keyEquivalent: "")
 
         // Window menu.
         let windowItem = NSMenuItem()

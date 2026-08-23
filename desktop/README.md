@@ -48,6 +48,23 @@ from pure logic so the tricky parts are unit-testable (`test-shell.sh`):
 | `SessionListWire` | `POST /api/session.list` request/response codec (lenient decode) |
 | `SessionMonitor` + `SystemPresenceReporter` | running/finished diffing → badge, notifications, bounce |
 
+## Using your phone (LAN pairing, t3code style)
+
+1. Server menu ▸ **Enable Remote Access (LAN)** — the app starts a token gate
+   bound to all interfaces and keeps it running across relaunches until
+   disabled.
+2. Server menu ▸ **Pair Mobile Device…** — a QR encodes
+   `http://<mac-ip>:<port>/pair/<one-time-code>`.
+3. Scan with the phone's camera (same Wi-Fi). Opening the link once exchanges
+   the code for a long-lived cookie and lands in the full web UI: all
+   sessions, approvals, and live agent streams.
+
+The gate (`desktop/gate/gate.mjs`) authenticates every HTTP request and
+WebSocket upgrade against the pair secret before proxying to the loopback
+server — the harness itself is never exposed unauthenticated. Traffic stays
+on your LAN; there is no cloud relay. For access away from home, join a
+Tailscale (or similar) network and re-pair against the tailnet IP.
+
 ## Two packaging modes
 
 | Mode | Build | Behavior |

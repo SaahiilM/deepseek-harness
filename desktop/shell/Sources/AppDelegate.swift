@@ -17,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
         presence: presence,
         isFrontmost: { NSApp.isActive })
     private lazy var approvalStream = ApprovalStream(presence: presence)
+    private let remoteAccess = RemoteAccessController()
+    private var pairingWindow: PairingWindowController?
     private let server = ServerController()
 
     /// Set once the server reports a ready URL; drives New Window and
@@ -28,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate(ignoringOtherApps: true)
         AppMenuBuilder.install(into: self)
+        setRemoteAccess(UserDefaults.standard.bool(forKey: Self.remoteAccessDefaultsKey))
 
         makeWindow().showWindow(nil)
 
@@ -40,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
     func applicationWillTerminate(_ notification: Notification) {
         sessionMonitor.stop()
         approvalStream.stop()
+        remoteAccess.disable()
         server.stop()
     }
 
@@ -71,15 +75,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
             appURL = url
             sessionMonitor.start(baseURL: url)
             approvalStream.start(baseURL: url)
+            if remoteAccessRequested, let port = url.port {
+                remoteAccess.enable(repoRoot: server.repoRoot, upstreamPort: port)
+            }
             windows.lifecycleFollowers.forEach { $0.loadApp(url) }
         case .failed(let reason, let logTail):
             sessionMonitor.stop()
             approvalStream.stop()
+            remoteAccess.disable()
             NSApp.requestUserAttention(.criticalRequest)
             windows.lifecycleFollowers.forEach { $0.showErrorPage(reason: reason, logTail: logTail) }
         case .exited(let status, let logTail):
             sessionMonitor.stop()
             approvalStream.stop()
+            remoteAccess.disable()
             appURL = nil
             windows.lifecycleFollowers.forEach { $0.showErrorPage(
                 reason: "The harness server exited (status \(status)).",
@@ -132,7 +141,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
         appURL = nil
         sessionMonitor.stop()
         approvalStream.stop()
+        remoteAccess.disable()
         windows.forEach { $0.showStartingPage() }
         server.start()
+    }
+
+    // MARK: - Remote access (phone pairing)
+
+    /// Stored preference so the LAN listener survives relaunches; toggling
+    /// from the menu keeps it in sync.
+    static let remoteAccessDefaultsKey = "DSHRemoteAccess"
+
+    /// LAN gate follows the server: (re)start it whenever a server is running
+    /// and remote access is on; kill it when the server goes away.
+    private var remoteAccessRequested = false
+
+    private func syncRemoteAccessMenuState() {
+        guard let serverMenu = NSApp.mainMenu?.item(withTitle: "Server")?.submenu else { return }
+        let item = serverMenu.items.first { $0.tag == 900 }
+        item?.state = remoteAccessRequested ? .on : .off
+        item?.title = remoteAccessRequested ? "Disable Remote Access (LAN)" : "Enable Remote Access (LAN)"
+    }
+
+    @objc func toggleRemoteAccess(_ sender: Any?) {
+        setRemoteAccess(!remoteAccessRequested)
+    }
+
+    private func setRemoteAccess(_ enabled: Bool) {
+        remoteAccessRequested = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.remoteAccessDefaultsKey)
+        syncRemoteAccessMenuState()
+        if enabled {
+            if case .running(let url) = server.state, let port = url.port {
+                remoteAccess.enable(repoRoot: server.repoRoot, upstreamPort: port)
+            }
+            // else: the .running handler starts the gate when ready.
+        } else {
+            remoteAccess.disable()
+            closePairingWindow()
+        }
+    }
+
+    @objc func showPairingWindow(_ sender: Any?) {
+        guard let url = remoteAccess.pairingURL else { return }
+        let controller = PairingWindowController(pairingURL: url)
+        pairingWindow = controller
+        controller.showWindow(nil)
+    }
+
+    private func closePairingWindow() {
+        pairingWindow?.close()
+        pairingWindow = nil
     }
 }
