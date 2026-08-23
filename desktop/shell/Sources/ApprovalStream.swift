@@ -166,7 +166,7 @@ final class ApprovalStream {
         switch type {
         case "approval/requested":
             guard let id = stringField(payload["approvalId"]),
-                  let sessionId = stringField(payload["sessionId"]),
+                  stringField(payload["sessionId"]) != nil,
                   let toolName = stringField(payload["toolName"]) else { return nil }
             return .requested(PendingApprovalInfo(id: id, toolName: toolName))
         case "approval/resolved":

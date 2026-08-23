@@ -108,21 +108,29 @@ func testRepoMarkerRules() {
     var existing: Set<String> = []
     func fakeExists(_ path: String) -> Bool { existing.contains(path) }
 
-    existing = ["/repo/apps/cli/src/bin.ts"]
+    // isValidRepo probes the joined marker path; walk-up probes directories.
+    existing = ["/repo/apps/cli/src/bin.ts", "/repo"]
     expectTrue(RepoLocator.isValidRepo("/repo", fileExists: fakeExists), "repo: valid when marker present")
     expectFalse(RepoLocator.isValidRepo("/other", fileExists: fakeExists), "repo: invalid without marker")
 
     expectEqual(
-        RepoLocator.locateByWalkingUp(fromPath: "/repo/desktop/dist/App.app/Contents/MacOS/bin", fileExists: fakeExists),
+        RepoLocator.locateByWalkingUp(fromPath: "/repo/desktop/dist/App.app/Contents/MacOS/bin", isRepo: fakeExists),
         "/repo",
         "repo: walk-up finds root from bundle path")
     expectTrue(
-        RepoLocator.locateByWalkingUp(fromPath: "/usr/local/bin/app", fileExists: fakeExists) == nil,
+        RepoLocator.locateByWalkingUp(fromPath: "/usr/local/bin/app", isRepo: fakeExists) == nil,
         "repo: walk-up gives up outside a checkout")
 }
 
 func expectFalse(_ condition: Bool, _ name: String) {
     expectTrue(!condition, name)
+}
+
+/// In-memory stand-in for UserDefaults in resolution tests.
+final class InMemoryDefaults: DefaultsReading {
+    private let value: String?
+    init(value: String? = nil) { self.value = value }
+    func string(forKey key: String) -> String? { value }
 }
 
 // MARK: - ServerProbe fingerprint
@@ -171,6 +179,59 @@ func testApprovalStreamParsing() {
         "approvals: http base becomes ws mux path")
 }
 
+// MARK: - Embedded runtime resolution
+
+func testEmbeddedRuntimePriority() {
+    // The embedded snapshot is the LAST resort: env > default > walk-up >
+    // embedded, so an app inside the live checkout keeps using the checkout.
+    let validRepos: Set<String> = [
+        "/env/marker", "/default/marker", "/repo",
+        "/snapshot/app/Contents/Resources/runtime/marker",
+    ]
+    let exists = { validRepos.contains($0) }
+    expectTrue(RepoLocator.resolve(
+        environment: ["DSH_DESKTOP_REPO": "/env/marker"],
+        defaults: InMemoryDefaults(value: "/default/marker"),
+        executablePath: "/repo/deep/desktop/dist/bin",
+        embeddedPath: "/embedded/marker",
+        isValidRepo: exists) == "/env/marker",
+        "embedded: explicit environment beats everything")
+    expectTrue(RepoLocator.resolve(
+        environment: [:],
+        defaults: InMemoryDefaults(value: "/default/marker"),
+        executablePath: "/repo/deep/desktop/dist/bin",
+        embeddedPath: "/embedded/marker",
+        isValidRepo: exists) == "/default/marker",
+        "embedded: stored default beats walk-up and snapshot")
+    expectTrue(RepoLocator.resolve(
+        environment: [:],
+        defaults: InMemoryDefaults(),
+        executablePath: "/repo/deep/desktop/dist/bin",
+        embeddedPath: "/embedded/marker",
+        isValidRepo: exists) == "/repo",
+        "embedded: walk-up beats the snapshot during development")
+    expectTrue(RepoLocator.resolve(
+        environment: [:],
+        defaults: InMemoryDefaults(),
+        executablePath: "/Applications/App.app/Contents/MacOS/dsh-desktop",
+        embeddedPath: "/snapshot/app/Contents/Resources/runtime/marker",
+        isValidRepo: exists)?
+        .hasSuffix("Resources/runtime/marker") == true,
+        "embedded: relocated app falls back to its snapshot")
+    expectFalse(RepoLocator.resolve(
+        environment: [:],
+        defaults: InMemoryDefaults(),
+        executablePath: "/nowhere/bin",
+        embeddedPath: nil,
+        isValidRepo: exists) != nil,
+        "embedded: nothing anywhere fails resolution")
+    expectTrue(NodeLocator.repoLocalNodePath(
+        repoRoot: "/snap", isExecutableFile: { $0 == "/snap/.node-bin/node" }) == "/snap/.node-bin/node",
+        "embedded: repo-local node path resolves")
+    expectFalse(NodeLocator.repoLocalNodePath(repoRoot: "/snap", isExecutableFile: { _ in false }) != nil,
+                "embedded: missing repo-local node yields nil")
+}
+
 // MARK: - Run
 
 testSessionListWire()
@@ -180,6 +241,7 @@ testNodeVersionRules()
 testRepoMarkerRules()
 testServerProbeFingerprint()
 testApprovalStreamParsing()
+testEmbeddedRuntimePriority()
 
 print("")
 if failures > 0 {

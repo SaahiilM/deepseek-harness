@@ -48,6 +48,20 @@ from pure logic so the tricky parts are unit-testable (`test-shell.sh`):
 | `SessionListWire` | `POST /api/session.list` request/response codec (lenient decode) |
 | `SessionMonitor` + `SystemPresenceReporter` | running/finished diffing → badge, notifications, bounce |
 
+## Two packaging modes
+
+| Mode | Build | Behavior |
+|---|---|---|
+| Checkout-backed (default) | `build.sh` | Resolves the live checkout by walking up from the bundle; edits to the repo apply on next launch. Requires Node ^22.19\|\|>=24 on the machine. |
+| Self-contained | `make-standalone.sh` | Embeds a repository snapshot + a validated node binary into `Contents/Resources/runtime` (~1.6 GB). Runs on machines with neither the checkout nor Node installed. |
+
+The locator tries, in order: `DSH_DESKTOP_REPO` → `DSHDesktopRepoPath`
+default → walk-up from the executable → the embedded snapshot. So a
+standalone app kept inside the checkout still develops against it; one moved
+anywhere else uses its own snapshot. The embedded server is exercised at
+package time by `pick-node.sh`, which mirrors `NodeLocator`'s newest-first
+engines scan.
+
 ## How it works
 
 1. `build.sh` runs the normal `pnpm run build` (tsc + tsdown + web frontend),

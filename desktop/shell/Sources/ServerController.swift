@@ -79,6 +79,7 @@ final class ServerController: NSObject, @unchecked Sendable {
             return
         }
         repoRoot = repo
+        NSLog("dsh-desktop server: using harness checkout at %@", repo)
 
         transition(.starting(repoRoot: repo, port: 0))
         let candidates = adoptionCandidates()
@@ -89,8 +90,10 @@ final class ServerController: NSObject, @unchecked Sendable {
                 DispatchQueue.main.async { self.attach(url: adopted, repoRoot: repo) }
                 return
             }
-            // Nothing to adopt: spawn an owned server.
-            guard let node = NodeLocator.locate(environment: ProcessInfo.processInfo.environment) else {
+            // Nothing to adopt: spawn an owned server from the resolved root.
+            guard let node = NodeLocator.locate(
+                environment: ProcessInfo.processInfo.environment,
+                repoRoot: repo) else {
                 DispatchQueue.main.async {
                     self.transition(.failed(
                         reason: "Node.js was not found on this machine.",

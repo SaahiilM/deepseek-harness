@@ -18,12 +18,21 @@ enum NodeLocator {
     /// Locate a usable node binary, or nil when none qualifies.
     static func locate(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        homeDirectory: String = NSHomeDirectory()
+        homeDirectory: String = NSHomeDirectory(),
+        repoRoot: String? = nil
     ) -> String? {
         let fm = FileManager.default
         if let pinned = environment[environmentKey],
            fm.isExecutableFile(atPath: pinned), isSupportedNode(at: pinned) {
             return pinned
+        }
+        // A node shipped with the resolved checkout (the standalone bundle's
+        // .node-bin/node) outranks whatever the machine happens to have — the
+        // snapshot was validated against that exact binary.
+        if let repoRoot,
+           let bundled = repoLocalNodePath(repoRoot: repoRoot, isExecutableFile: { fm.isExecutableFile(atPath: $0) }),
+           isSupportedNode(at: bundled) {
+            return bundled
         }
 
         var candidates = nvmCandidates(homeDirectory: homeDirectory)
@@ -50,6 +59,16 @@ enum NodeLocator {
 
     /// nvm keeps one directory per version; return the supported ones newest
     /// first as full binary paths.
+    /// Path of a repo-local node binary, or nil when absent. Pure so tests
+    /// can inject the file-existence check.
+    static func repoLocalNodePath(
+        repoRoot: String,
+        isExecutableFile: (String) -> Bool = { _ in false }
+    ) -> String? {
+        let path = repoRoot + "/" + EmbeddedRuntime.nodePathInRepo
+        return isExecutableFile(path) ? path : nil
+    }
+
     static func nvmCandidates(homeDirectory: String) -> [String] {
         let versionsRoot = homeDirectory + "/.nvm/versions/node"
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: versionsRoot) else {
