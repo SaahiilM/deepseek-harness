@@ -49,9 +49,10 @@ The Codex-like app is therefore a **native macOS shell** around that server:
 - [x] `desktop/scripts/build.sh --shell-only` produced a universal .app; launched,
       served UI (HTTP 200), and quit with clean server shutdown on this machine.
 - [x] `sync-origin.sh` verified (`--check` and no-op sync paths).
-- [ ] Full `build.sh` path (pnpm install + pnpm run build + shell) validated end to
-      end — deferred: rebuilding web dist hot-reloads the live GUI session on port
-      3080; run it when that disruption is acceptable.
+- [x] Full `build.sh` path validated end to end (pnpm install → harness build →
+      universal .app); relaunched and re-verified after the rebuild.
+- [x] Optional `install-sync-timer.sh` (LaunchAgent, opt-in) for automatic daily
+      upstream syncs with outcomes appended to `agent-memory/sync-log.md`.
 
 ## How to build & run
 
