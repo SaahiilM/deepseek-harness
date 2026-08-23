@@ -188,15 +188,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
     }
 
     /// Start the gate with the preferred transport. Tailscale is tried first
-    /// when the user set it up; anything short of a running tailnet falls
-    /// back to the LAN bind.
+    /// when the user set it up: `tailscale serve` fronts the loopback gate
+    /// with real TLS on the MagicDNS name, giving phone browsers the secure
+    /// context the web UI needs. Anything short of a running tailnet falls
+    /// back to the plain-LAN bind.
     private func startGate(upstreamPort: Int) {
         if preferTailnetTransport {
             let status = TailscaleProbe.check()
-            if status.isRunning, let host = status.pairingHost {
+            if status.isRunning, let dnsName = status.dnsName ?? status.ipv4 {
                 remoteAccess.enable(repoRoot: server.repoRoot,
                                     upstreamPort: upstreamPort,
-                                    transport: .tailnet(host: host))
+                                    transport: .tailnetServe(dnsName: dnsName))
                 return
             }
             NSLog("dsh-desktop remote-access: tailnet not running; using LAN transport")

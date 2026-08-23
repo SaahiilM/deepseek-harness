@@ -92,6 +92,7 @@ const server = http.createServer((req, res) => {
   const headers = { ...req.headers }
   delete headers.cookie            // never leak pairing material upstream
   delete headers.authorization
+  delete headers['accept-encoding'] // HTML polyfill injection needs identity bodies
   // The phone's Host (tailnet name/IP : gate port) fails the harness
   // browser-trust fence, which accepts loopback, LAN-literal, or explicitly
   // trusted authorities. Rewrite to the upstream authority so proxied
@@ -118,8 +119,36 @@ const server = http.createServer((req, res) => {
     headers,
   })
   upstream.on('response', upstreamRes => {
-    res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers)
-    upstreamRes.pipe(res)
+    const contentType = String(upstreamRes.headers['content-type'] ?? '')
+    if (!contentType.includes('text/html')) {
+      res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers)
+      upstreamRes.pipe(res)
+      return
+    }
+    // HTML over plain http lacks secure-context APIs the UI needs
+    // (crypto.randomUUID); inject a fallback before the app boots. HTTPS
+    // via tailscale serve has them natively and gets an untouched body.
+    const chunks = []
+    let size = 0
+    upstreamRes.on('data', chunk => {
+      size += chunk.length
+      if (size <= 5 * 1024 * 1024) chunks.push(chunk)
+    })
+    upstreamRes.on('end', () => {
+      let body = Buffer.concat(chunks).toString('utf8')
+      if (size > 5 * 1024 * 1024) body = '' // oversized html: pass nothing rather than a broken page
+      const polyfill = '<script>if(!window.crypto.randomUUID){window.crypto.randomUUID=function(){const b=window.crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;const h=Array.from(b,x=>x.toString(16).padStart(2,"0"));return h.slice(0,4).join("")+"-"+h.slice(4,6).join("")+"-"+h.slice(6,8).join("")+"-"+h.slice(8,10).join("")+"-"+h.slice(10).join("")}};</script>'
+      if (body.includes('</head>')) {
+        body = body.replace('</head>', polyfill + '</head>')
+      } else {
+        body = polyfill + body
+      }
+      const headers = { ...upstreamRes.headers }
+      headers['content-length'] = String(Buffer.byteLength(body))
+      delete headers['content-encoding'] // body was decompressed implicitly? no - only when upstream sent identity
+      res.writeHead(upstreamRes.statusCode ?? 502, headers)
+      res.end(body)
+    })
   })
   upstream.on('error', error => {
     if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' })
