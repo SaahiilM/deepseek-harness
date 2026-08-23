@@ -50,6 +50,7 @@ final class SessionMonitor {
         runningSessions = []
         lastPollFailure = nil
         loggedFirstSuccess = false
+        lastReportedRunningCount = -1
         presence.runningAgentCountChanged(0)
     }
 
@@ -101,6 +102,9 @@ final class SessionMonitor {
 
     // MARK: - Diffing
 
+    /// Last count reported to presence, so badge changes log once per change.
+    private var lastReportedRunningCount = -1
+
     private func apply(snapshots: [SessionSummarySnapshot]) {
         let nowRunning = Set(snapshots.filter(\.running).map(\.id))
         var titles = [String: String]()
@@ -108,6 +112,10 @@ final class SessionMonitor {
             if let title = snapshot.title { titles[snapshot.id] = title }
         }
 
+        if nowRunning.count != lastReportedRunningCount {
+            NSLog("dsh-desktop session monitor: running agents: %d", nowRunning.count)
+            lastReportedRunningCount = nowRunning.count
+        }
         presence.runningAgentCountChanged(nowRunning.count)
 
         // Finished turns: were running last poll, idle now — suppressed while

@@ -53,13 +53,16 @@ from pure logic so the tricky parts are unit-testable (`test-shell.sh`):
 1. `build.sh` runs the normal `pnpm run build` (tsc + tsdown + web frontend),
    then compiles the Swift shell twice (arm64, x86_64) and merges with `lipo`
    into `dist/DeepSeek Harness.app` — a universal binary.
-2. On launch, the shell resolves the checkout backing it (walking up from the
-   executable; override with `defaults write ai.deepseek.harness.desktop
-   DSHDesktopRepoPath <path>` or env `DSH_DESKTOP_REPO`), picks a free port, and
-   spawns `node --import tsx/esm apps/cli/src/bin.ts web --no-open --port N`.
+2. **One backend per machine**: on launch the app probes the harness default
+   port (3080) — and the last port it spawned itself — for a live harness
+   server (fingerprinted via its `session.list` RPC). An existing server is
+   **adopted**, never duplicated or terminated; agents running in a browser
+   tab show up in the native app's badge exactly as agents launched natively
+   do. Only when nothing answers does the app spawn an owned server from this
+   checkout (`node --import tsx/esm apps/cli/src/bin.ts web --no-open`).
 3. It waits for HTTP readiness, loads the UI in a `WKWebView`, and confines
    navigation to loopback — external links open in your default browser.
-4. Quitting the app SIGTERMs the server. Server output lands in
+4. Quitting the app terminates only an *owned* server. Server output lands in
    `~/Library/Application Support/DeepSeek Harness/server.log`.
 
 ## Desktop affordances (Codex/bb/t3code patterns)
@@ -68,7 +71,8 @@ from pure logic so the tricky parts are unit-testable (`test-shell.sh`):
 - **Session presence** — a `SessionMonitor` polls `POST /api/session.list`
   every 3s: the dock badge shows how many agents are running, and finishing an
   agent while the app is in the background posts a notification (plus a dock
-  bounce when notifications are unavailable).
+  bounce when notifications are unavailable). Because the app adopts the
+  machine's running server, this includes agents started from a browser tab.
 - **Multi-window** — File ▸ New Window (⌘N) opens another view onto the same
   local server; window frames persist across launches.
 - **Native menus** — Edit roles make undo/copy/paste work inside the webview;

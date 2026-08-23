@@ -1,9 +1,12 @@
-// ServerController — owns the harness web-server process lifecycle.
+// ServerController — resolves and owns the connection to the machine's
+// harness backend.
 //
-// Responsibilities: resolve the checkout and node binary, pick a port, spawn
-// `node --import tsx/esm apps/cli/src/bin.ts web --no-open --port N`, probe
-// readiness, and report state transitions. Resolution, logging, port picking,
-// and probing live in their own modules; this type only orchestrates them.
+// Adopt-over-spawn (the bb desktop pattern): the machine should run ONE
+// harness host; browser tabs and the native window are both just clients.
+// On start the controller probes candidate ports for an existing harness
+// server and attaches to it. Only when none answers does it spawn an owned
+// `node … web --no-open --port N` process. An attached server is never
+// terminated by this app — we do not own it.
 
 import Foundation
 
@@ -11,9 +14,9 @@ import Foundation
 enum ServerState: Equatable {
     /// Resolved configuration, process not started yet.
     case idle
-    /// Process spawned; readiness probe in flight.
+    /// Process spawned (or attachment probe in flight); readiness in question.
     case starting(repoRoot: String, port: Int)
-    /// Server answered HTTP; the UI may load the URL.
+    /// A server — adopted or owned — is answering; the UI may load the URL.
     case running(URL)
     /// Startup probe timed out or the process exited before becoming ready.
     case failed(reason: String, logTail: [String])
@@ -23,26 +26,40 @@ enum ServerState: Equatable {
 
 final class ServerController: NSObject, @unchecked Sendable {
 
-    static let defaultPort = 3080
-    /// First boot after a fresh build can be slow; give it generous room.
+    /// The documented default port every harness web install answers on.
+    static let preferredExternalPort = 3080
     static let readinessTimeout: TimeInterval = 180
+
+    enum Mode: Equatable {
+        /// Attached to a server this app did not start; never terminated.
+        case attached
+        /// Spawned by this app; terminated on quit/restart.
+        case owned
+    }
 
     /// Invoked on the main queue whenever the state changes.
     var onStateChange: ((ServerState) -> Void)?
 
     private(set) var state: ServerState = .idle
+    private(set) var mode: Mode = .owned
     private(set) var port: Int = 0
     private(set) var repoRoot: String = ""
 
     private let logStore: ServerLogStore
+    private let defaults: UserDefaults
     private var process: Process?
     private var probeTask: Task<Void, Never>?
 
-    init(logStore: ServerLogStore = ServerLogStore()) {
+    init(logStore: ServerLogStore = ServerLogStore(), defaults: UserDefaults = .standard) {
         self.logStore = logStore
+        self.defaults = defaults
     }
 
     var logFilePath: String { logStore.filePath }
+
+    /// UserDefaults key remembering the last owned-server port so a later
+    /// launch can adopt it after the app quit but the server stayed up.
+    static let lastOwnedPortKey = "DSHDesktopLastOwnedPort"
 
     // MARK: - Lifecycle
 
@@ -63,16 +80,65 @@ final class ServerController: NSObject, @unchecked Sendable {
         }
         repoRoot = repo
 
-        guard let node = NodeLocator.locate(environment: ProcessInfo.processInfo.environment) else {
-            transition(.failed(
-                reason: "Node.js was not found on this machine.",
-                logTail: ["Install Node ^22.19 || >=24 (Homebrew: brew install node),",
-                          "or point \(NodeLocator.environmentKey) at a node binary."]))
-            return
-        }
+        transition(.starting(repoRoot: repo, port: 0))
+        let candidates = adoptionCandidates()
 
-        let pickedPort = FreePortPicker.pickFreePort(defaultPort: Self.defaultPort)
+        probeTask = Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            if let adopted = await Self.firstHarnessServer(among: candidates) {
+                DispatchQueue.main.async { self.attach(url: adopted, repoRoot: repo) }
+                return
+            }
+            // Nothing to adopt: spawn an owned server.
+            guard let node = NodeLocator.locate(environment: ProcessInfo.processInfo.environment) else {
+                DispatchQueue.main.async {
+                    self.transition(.failed(
+                        reason: "Node.js was not found on this machine.",
+                        logTail: ["Install Node ^22.19 || >=24 (Homebrew: brew install node),",
+                                  "or point \(NodeLocator.environmentKey) at a node binary."]))
+                }
+                return
+            }
+            DispatchQueue.main.async { self.spawnOwned(node: node, repoRoot: repo) }
+        }
+    }
+
+    /// Ports worth probing, most likely first: the harness default, then the
+    /// last port an owned server used (it may outlive the app).
+    private func adoptionCandidates() -> [Int] {
+        var ports = [Self.preferredExternalPort]
+        let lastOwned = defaults.integer(forKey: Self.lastOwnedPortKey)
+        if lastOwned > 0 && lastOwned != Self.preferredExternalPort {
+            ports.append(lastOwned)
+        }
+        return ports
+    }
+
+    /// First candidate answered by a harness server, or nil.
+    private static func firstHarnessServer(among ports: [Int]) async -> URL? {
+        for port in ports {
+            guard let url = URL(string: "http://127.0.0.1:\(port)/") else { continue }
+            if await ServerProbe.isHarnessServer(at: url) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    /// Attach to an existing server: report it running without owning it.
+    private func attach(url: URL, repoRoot: String) {
+        mode = .attached
+        port = url.port ?? Self.preferredExternalPort
+        logStore.append("--- attached to existing harness server at \(url.absoluteString) ---\n")
+        transition(.running(url))
+    }
+
+    /// Spawn an owned harness server on a fresh free port.
+    private func spawnOwned(node: String, repoRoot: String) {
+        let pickedPort = FreePortPicker.pickFreePort(defaultPort: Self.preferredExternalPort)
         port = pickedPort
+        mode = .owned
+        defaults.set(pickedPort, forKey: Self.lastOwnedPortKey)
 
         let args = ["--import", "tsx/esm",
                     RepoLocator.markerPath, "web",
@@ -81,7 +147,7 @@ final class ServerController: NSObject, @unchecked Sendable {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: node)
         proc.arguments = args
-        proc.currentDirectoryPath = repo
+        proc.currentDirectoryPath = repoRoot
         proc.environment = childEnvironment()
         proc.standardOutput = Pipe()
         proc.standardError = Pipe()
@@ -114,8 +180,7 @@ final class ServerController: NSObject, @unchecked Sendable {
         }
         process = proc
 
-        logStore.append("--- spawning: \(node) \(args.joined(separator: " ")) (cwd: \(repo)) ---\n")
-        transition(.starting(repoRoot: repo, port: pickedPort))
+        logStore.append("--- spawning: \(node) \(args.joined(separator: " ")) (cwd: \(repoRoot)) ---\n")
 
         let url = URL(string: "http://127.0.0.1:\(pickedPort)/")!
         probeTask = Task.detached(priority: .userInitiated) { [weak self] in
@@ -142,11 +207,11 @@ final class ServerController: NSObject, @unchecked Sendable {
         }
     }
 
-    /// Terminate the server. Safe to call repeatedly.
+    /// Terminate the owned server, if any. An attached server is never killed.
     func stop() {
         probeTask?.cancel()
         probeTask = nil
-        if let proc = process, proc.isRunning {
+        if mode == .owned, let proc = process, proc.isRunning {
             // The harness installs its own shutdown handlers; SIGTERM lets it
             // tear down child processes itself.
             proc.terminate()

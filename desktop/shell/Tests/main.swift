@@ -125,6 +125,22 @@ func expectFalse(_ condition: Bool, _ name: String) {
     expectTrue(!condition, name)
 }
 
+// MARK: - ServerProbe fingerprint
+
+func testServerProbeFingerprint() {
+    // A harness server's session.list answer — the adoption fingerprint.
+    let harness = Data(#"{"type":"server-response","rpcId":"p","result":{"ok":true,"value":{"items":[]}}}"#.utf8)
+    expectTrue(ServerProbe.isHarnessEnvelope(harness), "probe: empty ok envelope identifies a harness host")
+
+    // An unrelated HTTP service answering 200 with HTML.
+    expectFalse(ServerProbe.isHarnessEnvelope(Data("<html>hi</html>".utf8)),
+                "probe: non-JSON 200 body is not a harness")
+    // A harness error envelope (method failed) must not count as identified.
+    expectFalse(ServerProbe.isHarnessEnvelope(
+        Data(#"{"type":"server-response","rpcId":"p","result":{"ok":false,"error":{"code":"x","message":"y"}}}"#.utf8)),
+        "probe: error envelope is not an identification")
+}
+
 // MARK: - Run
 
 testSessionListWire()
@@ -132,6 +148,7 @@ testLifecyclePages()
 testServerLogStore()
 testNodeVersionRules()
 testRepoMarkerRules()
+testServerProbeFingerprint()
 
 print("")
 if failures > 0 {

@@ -38,6 +38,8 @@ The Codex-like app is therefore a **native macOS shell** around that server:
 | 6 | Sync policy: rebase `desktop-app` onto `origin/master` via `desktop/scripts/sync-origin.sh` | Linear history keeps future upstream PRs trivial; `--merge` escape hatch provided | 2026-08-23 |
 | 7 | Node discovery scans nvm version dirs and validates engines (^22.19 \|\| >=24) by executing `--version` | A stale `/usr/local/bin/node` (v16) silently broke the source launch; presence on disk proves nothing, only a successful run does | 2026-08-23 |
 | 8 | Bootstrap uses explicit `static func main()` (not bare `@main` delegation) | `@main` on NSApplicationDelegate compiles but never installs the delegate without nib/principal-class wiring — app ran with no window and no error | 2026-08-23 |
+| 9 | Modular shell: one responsibility per file, pure logic split from AppKit glue, deps injected at the composition root | User directive to follow app-dev standards; enabled a unit suite that immediately caught three real bugs (entity double-encoding, missing `>` escaping, tail newline accounting) | 2026-08-23 |
+| 10 | **Adopt-over-spawn**: probe 3080 (+ last owned port) for a live harness server and attach; only spawn an owned server when none answers; never terminate an attached server | `running` in session.list is per-host live state — separate backends made browser-run agents invisible to the native app. bb's desktop solves it identically (server-probe + owned-runtime-supervisor). One backend per machine, many clients | 2026-08-23 |
 
 ## Reference-product patterns (studied 2026-08-23)
 
@@ -85,8 +87,12 @@ the correct Codex-like scope.
       upstream syncs with outcomes appended to `agent-memory/sync-log.md`.
 - [x] Round 2 (reference-parity): single-instance, window-state persistence,
       Edit/zoom menus, New Window, SessionMonitor (dock badge + finish
-      notifications + dock-bounce fallback), DMG packaging (`make-dmg.sh`) —
-      all verified live in bundled mode.
+      notifications + dock-bounce fallback), DMG packaging (`make-dmg.sh`).
+- [x] Round 3 (standards): 14 single-responsibility modules, injected deps,
+      build.sh source glob, `test-shell.sh` with 30 checks (all green).
+- [x] Round 4 (backend adoption): app attaches to a live harness server
+      (verified against this machine's 3080 GUI host: monitor reported the
+      browser-run agents); owned spawn only when nothing to adopt.
 
 ## How to build & run
 
