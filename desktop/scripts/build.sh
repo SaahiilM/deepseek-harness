@@ -60,12 +60,10 @@ mkdir -p "$DIST_DIR"
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
 
-SOURCES=(
-  "$DESKTOP_DIR/shell/Sources/AppDelegate.swift"
-  "$DESKTOP_DIR/shell/Sources/ServerController.swift"
-  "$DESKTOP_DIR/shell/Sources/WindowController.swift"
-  "$DESKTOP_DIR/shell/Sources/SessionMonitor.swift"
-)
+# One module per responsibility under Sources/ — the glob keeps new files
+# from needing build-script edits.
+SOURCES=("$DESKTOP_DIR"/shell/Sources/*.swift)
+[[ ${#SOURCES[@]} -gt 0 ]] || fail "no Swift sources found in desktop/shell/Sources/"
 FRAMEWORKS=(-framework AppKit -framework WebKit -framework Network -framework UserNotifications)
 
 # swiftc accepts one -target per invocation, so each architecture is compiled

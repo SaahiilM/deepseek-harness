@@ -30,6 +30,24 @@ open "desktop/dist/DeepSeek Harness.app"
 
 Requirements: Node ^22.19 || >=24 · pnpm 11 · Xcode command line tools (`swiftc`).
 
+## Architecture
+
+One module per responsibility under `shell/Sources/`; AppKit glue is separated
+from pure logic so the tricky parts are unit-testable (`test-shell.sh`):
+
+| Module | Responsibility |
+|---|---|
+| `AppMain` / `SingleInstanceGuard` | entry point; relaunch activates the running instance |
+| `AppDelegate` | composition root: wires collaborators, routes `ServerState` |
+| `AppMenuBuilder` | menu-bar structure (actions live on AppDelegate) |
+| `WindowManager` / `WindowController` | window collection; one webview window each |
+| `LifecyclePages` | starting/error HTML — pure functions, HTML-escaped inputs |
+| `ServerController` | spawns/probes/stops the harness server process |
+| `RepoLocator` / `NodeLocator` / `FreePortPicker` | checkout resolution, engine-validated node discovery, ephemeral port |
+| `ServerLogStore` / `ReadinessProbe` | log file + tail buffer; HTTP readiness polling |
+| `SessionListWire` | `POST /api/session.list` request/response codec (lenient decode) |
+| `SessionMonitor` + `SystemPresenceReporter` | running/finished diffing → badge, notifications, bounce |
+
 ## How it works
 
 1. `build.sh` runs the normal `pnpm run build` (tsc + tsdown + web frontend),
