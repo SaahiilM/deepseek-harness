@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
     private lazy var approvalStream = ApprovalStream(presence: presence)
     private let remoteAccess = RemoteAccessController()
     private var pairingWindow: PairingWindowController?
+    private var tailnetSetupWindow: TailnetSetupWindowController?
+    private var preferTailnetTransport = false
     private let server = ServerController()
 
     /// Set once the server reports a ready URL; drives New Window and
@@ -30,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate(ignoringOtherApps: true)
         AppMenuBuilder.install(into: self)
+        preferTailnetTransport = UserDefaults.standard.bool(forKey: Self.remoteTransportDefaultsKey)
         setRemoteAccess(UserDefaults.standard.bool(forKey: Self.remoteAccessDefaultsKey))
 
         makeWindow().showWindow(nil)
@@ -76,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
             sessionMonitor.start(baseURL: url)
             approvalStream.start(baseURL: url)
             if remoteAccessRequested, let port = url.port {
-                remoteAccess.enable(repoRoot: server.repoRoot, upstreamPort: port)
+                startGate(upstreamPort: port)
             }
             windows.lifecycleFollowers.forEach { $0.loadApp(url) }
         case .failed(let reason, let logTail):
@@ -151,6 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
     /// Stored preference so the LAN listener survives relaunches; toggling
     /// from the menu keeps it in sync.
     static let remoteAccessDefaultsKey = "DSHRemoteAccess"
+    static let remoteTransportDefaultsKey = "DSHRemoteAccessPreferTailnet"
 
     /// LAN gate follows the server: (re)start it whenever a server is running
     /// and remote access is on; kill it when the server goes away.
@@ -170,16 +174,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
     private func setRemoteAccess(_ enabled: Bool) {
         remoteAccessRequested = enabled
         UserDefaults.standard.set(enabled, forKey: Self.remoteAccessDefaultsKey)
+        UserDefaults.standard.set(preferTailnetTransport, forKey: Self.remoteTransportDefaultsKey)
         syncRemoteAccessMenuState()
         if enabled {
             if case .running(let url) = server.state, let port = url.port {
-                remoteAccess.enable(repoRoot: server.repoRoot, upstreamPort: port)
+                startGate(upstreamPort: port)
             }
             // else: the .running handler starts the gate when ready.
         } else {
             remoteAccess.disable()
             closePairingWindow()
         }
+    }
+
+    /// Start the gate with the preferred transport. Tailscale is tried first
+    /// when the user set it up; anything short of a running tailnet falls
+    /// back to the LAN bind.
+    private func startGate(upstreamPort: Int) {
+        if preferTailnetTransport {
+            let status = TailscaleProbe.check()
+            if status.isRunning, let host = status.pairingHost {
+                remoteAccess.enable(repoRoot: server.repoRoot,
+                                    upstreamPort: upstreamPort,
+                                    transport: .tailnet(host: host))
+                return
+            }
+            NSLog("dsh-desktop remote-access: tailnet not running; using LAN transport")
+        }
+        remoteAccess.enable(repoRoot: server.repoRoot, upstreamPort: upstreamPort, transport: .lan)
+    }
+
+    // MARK: - Tailnet setup wizard
+
+    @objc func showMobileSetup(_ sender: Any?) {
+        let controller = tailnetSetupWindow ?? TailnetSetupWindowController()
+        tailnetSetupWindow = controller
+        controller.onTailnetReady = { [weak self] status in
+            guard let self else { return }
+            self.preferTailnetTransport = true
+            self.tailnetSetupWindow?.close()
+            self.tailnetSetupWindow = nil
+            self.setRemoteAccess(true)
+            if let url = self.remoteAccess.pairingURL {
+                let pairing = PairingWindowController(pairingURL: url)
+                self.pairingWindow = pairing
+                pairing.showWindow(nil)
+            }
+            _ = status
+        }
+        controller.onUseLanInstead = { [weak self] in
+            guard let self else { return }
+            self.preferTailnetTransport = false
+            self.tailnetSetupWindow?.close()
+            self.tailnetSetupWindow = nil
+            self.setRemoteAccess(true)
+            if let url = self.remoteAccess.pairingURL {
+                let pairing = PairingWindowController(pairingURL: url)
+                self.pairingWindow = pairing
+                pairing.showWindow(nil)
+            }
+        }
+        controller.showWindow(nil)
     }
 
     @objc func showPairingWindow(_ sender: Any?) {

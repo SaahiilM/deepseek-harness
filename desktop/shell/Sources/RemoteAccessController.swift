@@ -13,6 +13,14 @@ final class RemoteAccessController: NSObject, @unchecked Sendable {
 
     static let defaultGatePort = 52390
 
+    /// Where the gate listens and what the pairing URL advertises.
+    enum Transport: Equatable {
+        /// All interfaces; pairing URL uses the primary LAN address.
+        case lan
+        /// Bound to the tailnet address only; URL prefers MagicDNS name.
+        case tailnet(host: String)
+    }
+
     private var process: Process?
     private let queue = DispatchQueue(label: "dsh-desktop.remote-access")
 
@@ -40,7 +48,7 @@ final class RemoteAccessController: NSObject, @unchecked Sendable {
 
     /// Start (or restart against a new upstream) the gate. `repoRoot` supplies
     /// node and the gate script path; `upstreamPort` is the harness server's.
-    func enable(repoRoot: String, upstreamPort: Int) {
+    func enable(repoRoot: String, upstreamPort: Int, transport: Transport = .lan) {
         queue.async { [weak self] in
             guard let self else { return }
             self.stopSync()
@@ -55,12 +63,33 @@ final class RemoteAccessController: NSObject, @unchecked Sendable {
             let code = Self.randomHex(byteCount: 4)
             let gatePort = FreePortPicker.pickFreePort(defaultPort: Self.defaultGatePort)
 
+            // Tailnet mode binds the tailnet address only: plain-LAN devices
+            // cannot even open a connection, and the phone reaches it from
+            // anywhere on the tailnet.
+            var bindAddress = "0.0.0.0"
+            var advertisedHost: String?
+            if case .tailnet(let host) = transport {
+                if let ip = TailscaleProbe.check().ipv4 {
+                    bindAddress = ip
+                    advertisedHost = host
+                } else {
+                    NSLog("dsh-desktop remote-access: tailnet address unavailable; falling back to LAN bind")
+                }
+            }
+            if advertisedHost == nil {
+                advertisedHost = LanAddress.primaryAddress()
+            }
+            guard let advertisedHost else {
+                NSLog("dsh-desktop remote-access: no reachable address found for pairing")
+                return
+            }
+
             let proc = Process()
             proc.executableURL = URL(fileURLWithPath: node)
             proc.arguments = [repoRoot + "/desktop/gate/gate.mjs"]
             proc.environment = [
                 "GATE_PORT": String(gatePort),
-                "GATE_BIND": "0.0.0.0",
+                "GATE_BIND": bindAddress,
                 "UPSTREAM_PORT": String(upstreamPort),
                 "PAIR_SECRET": secret,
                 "PAIR_CODE": code,
@@ -77,16 +106,15 @@ final class RemoteAccessController: NSObject, @unchecked Sendable {
             }
             self.process = proc
 
-            if let lan = LanAddress.primaryAddress(),
-               let url = Self.pairingCodeURL(lanAddress: lan, gatePort: gatePort, code: code) {
+            if let url = Self.pairingCodeURL(lanAddress: advertisedHost, gatePort: gatePort, code: code) {
                 DispatchQueue.main.async {
                     self.pairingURL = url
                     self.isEnabled = true
                     self.onPairingURLChange?(url)
                 }
-                NSLog("dsh-desktop remote-access: gate on port %d (pairing available)", gatePort)
+                NSLog("dsh-desktop remote-access: gate on %@:%d (pairing available)", bindAddress, gatePort)
             } else {
-                NSLog("dsh-desktop remote-access: no LAN address found; phone cannot reach this machine")
+                NSLog("dsh-desktop remote-access: could not build pairing URL")
             }
         }
     }

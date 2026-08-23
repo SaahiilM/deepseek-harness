@@ -257,6 +257,28 @@ func testLanAddressFiltering() {
     }
 }
 
+// MARK: - Tailscale status parsing
+
+func testTailscaleStatusParsing() {
+    // Captured shapes of `tailscale status --json`.
+    let running = #"{"BackendState":"Running","Self":{"TailscaleIPs":["100.101.5.7","fd7a:115c:a1e0::1"],"DNSName":"mac.tail1234.ts.net."}}"#.data(using: .utf8)!
+    expectTrue(TailscaleProbe.parse(exitCode: 0, data: running) == TailscaleStatus(
+        phase: .running, ipv4: "100.101.5.7", dnsName: "mac.tail1234.ts.net"),
+        "tailscale: running parses ip + trimmed dns name")
+    expectTrue(TailscaleProbe.parse(exitCode: 0, data: running).pairingHost == "mac.tail1234.ts.net",
+               "tailscale: magic dns preferred as pairing host")
+
+    let needsLogin = #"{"BackendState":"NeedsLogin"}"#.data(using: .utf8)!
+    expectTrue(TailscaleProbe.parse(exitCode: 1, data: needsLogin).phase == .needsLogin,
+               "tailscale: NeedsLogin detected despite nonzero exit")
+
+    let stopped = #"{"BackendState":"Stopped"}"#.data(using: .utf8)!
+    expectTrue(TailscaleProbe.parse(exitCode: 0, data: stopped).phase == .installed,
+               "tailscale: Stopped maps to installed-not-running")
+    expectFalse(TailscaleProbe.parse(exitCode: 0, data: Data("garbage".utf8)).isRunning,
+                "tailscale: garbage output is not running")
+}
+
 // MARK: - Run
 
 testSessionListWire()
@@ -269,6 +291,7 @@ testApprovalStreamParsing()
 testEmbeddedRuntimePriority()
 testRemoteAccessHelpers()
 testLanAddressFiltering()
+testTailscaleStatusParsing()
 
 print("")
 if failures > 0 {
