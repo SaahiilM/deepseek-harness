@@ -141,6 +141,36 @@ func testServerProbeFingerprint() {
         "probe: error envelope is not an identification")
 }
 
+// MARK: - ApprovalStream decoding
+
+func testApprovalStreamParsing() {
+    // Golden shape captured from a live host: server-request envelope with an
+    // approval/requested payload.
+    let requested = #"{"type":"server-request","rpcId":"r1","method":"x","payload":{"type":"approval/requested","sessionId":"session-1","approvalId":"ap-9","toolName":"bash"}}"#
+    expectTrue(ApprovalStream.event(fromText: requested) ==
+        .requested(PendingApprovalInfo(id: "ap-9", toolName: "bash")),
+        "approvals: approval/requested decodes with tool name")
+
+    let resolved = #"{"rpcId":"r2","payload":{"type":"approval/resolved","sessionId":"session-1","approvalId":"ap-9","outcome":"allowed-once"}}"#
+    expectTrue(ApprovalStream.event(fromText: resolved) == .resolved(id: "ap-9"),
+               "approvals: approval/resolved decodes by id")
+
+    // Unrelated payloads (the mux carries many frame kinds) are ignored.
+    let projection = #"{"rpcId":"r3","payload":{"type":"session/projection","key":"title"}}"#
+    expectFalse(ApprovalStream.event(fromText: projection) != nil,
+                "approvals: unrelated payload types are ignored")
+    // Missing required fields reject the event rather than crash.
+    let incomplete = #"{"rpcId":"r4","payload":{"type":"approval/requested","sessionId":"s"}}"#
+    expectFalse(ApprovalStream.event(fromText: incomplete) != nil,
+                "approvals: request without approvalId is rejected")
+    expectFalse(ApprovalStream.event(fromText: "not json") != nil,
+                "approvals: garbage text is rejected")
+    // ws scheme derivation lands on the mux upgrade path.
+    expectTrue(ApprovalStream.webSocketURL(for: URL(string: "http://127.0.0.1:3080/")!)?
+        .absoluteString == "ws://127.0.0.1:3080/api/events.mux",
+        "approvals: http base becomes ws mux path")
+}
+
 // MARK: - Run
 
 testSessionListWire()
@@ -149,6 +179,7 @@ testServerLogStore()
 testNodeVersionRules()
 testRepoMarkerRules()
 testServerProbeFingerprint()
+testApprovalStreamParsing()
 
 print("")
 if failures > 0 {

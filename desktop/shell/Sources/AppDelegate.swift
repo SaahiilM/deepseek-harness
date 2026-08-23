@@ -12,9 +12,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
     static let bundleIdentifier = "ai.deepseek.harness.desktop"
 
     private let windows = WindowManager()
+    private let presence = SystemPresenceReporter()
     private lazy var sessionMonitor = SessionMonitor(
-        presence: SystemPresenceReporter(),
+        presence: presence,
         isFrontmost: { NSApp.isActive })
+    private lazy var approvalStream = ApprovalStream(presence: presence)
     private let server = ServerController()
 
     /// Set once the server reports a ready URL; drives New Window and
@@ -37,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
 
     func applicationWillTerminate(_ notification: Notification) {
         sessionMonitor.stop()
+        approvalStream.stop()
         server.stop()
     }
 
@@ -67,13 +70,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
         case .running(let url):
             appURL = url
             sessionMonitor.start(baseURL: url)
+            approvalStream.start(baseURL: url)
             windows.lifecycleFollowers.forEach { $0.loadApp(url) }
         case .failed(let reason, let logTail):
             sessionMonitor.stop()
+            approvalStream.stop()
             NSApp.requestUserAttention(.criticalRequest)
             windows.lifecycleFollowers.forEach { $0.showErrorPage(reason: reason, logTail: logTail) }
         case .exited(let status, let logTail):
             sessionMonitor.stop()
+            approvalStream.stop()
             appURL = nil
             windows.lifecycleFollowers.forEach { $0.showErrorPage(
                 reason: "The harness server exited (status \(status)).",
@@ -124,6 +130,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuActions {
 
     @objc func restartServer(_ sender: Any?) {
         appURL = nil
+        sessionMonitor.stop()
+        approvalStream.stop()
         windows.forEach { $0.showStartingPage() }
         server.start()
     }
