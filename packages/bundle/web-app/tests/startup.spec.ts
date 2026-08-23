@@ -64,6 +64,7 @@ export const apply = ctx => globalThis.__webStartupApply(ctx)
     '    openBrowser: !!js ctx.webStartup.openBrowser',
     '    port: !!js ctx.webStartup.port ?? 3080',
     '    trustedHosts: !!js ctx.webStartup.trustedHosts',
+    '    directoryPicker: !!js ctx.webStartup.directoryPicker',
     '- id: provider',
     `  name: ${pathToFileURL(join(dir, 'provider.mjs')).href}`,
     '',
@@ -144,6 +145,23 @@ describe('web command-line provider', () => {
     expect(observed.out).toContain('--host 0.0.0.0 is intentionally not supported yet for safety: it would expose remote code execution to the network; use 127.0.0.1 instead')
     expect(values).toBeUndefined()
     expect(observed.readerConfig).toBeUndefined()
+    expect(observed.exits).toEqual([1])
+  })
+
+  it('pins the directory-picker interaction from --directory-picker', async () => {
+    const { values } = await bootProvider(['--directory-picker', 'browse'])
+    expect(values!.directoryPicker).toBe('browse')
+  })
+
+  it('absorbs --directory-picker auto into an absent pin', async () => {
+    const { values } = await bootProvider(['--directory-picker', 'auto'])
+    expect(values).toEqual({ openBrowser: true, trustedHosts: [] })
+  })
+
+  it('rejects an unknown directory-picker kind before the consumer activates', async () => {
+    const { values, observed } = await bootProvider(['--directory-picker', 'dialog'])
+    expect(observed.out).toContain('--directory-picker must be one of auto, native, browse')
+    expect(values).toBeUndefined()
     expect(observed.exits).toEqual([1])
   })
 })

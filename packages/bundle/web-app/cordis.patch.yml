@@ -90,9 +90,13 @@
 
     # Resolve bind host, SSH launch, and display once at boot, then mount the
     # matching dual-face directory picker. Mount -native or -browse directly in
-    # an overlay to pin the interaction.
+    # an overlay to pin the interaction, or pass --directory-picker to pin from
+    # the launch flags without editing composition.
     - id: directory-picker
       name: '@deepseek-ai/dsh-host-directory-picker-auto'
+      inject: [webStartup]
+      config:
+        pin: !!js ctx.webStartup.directoryPicker
 
     # Read-only projection of current Loader entries for trusted client RPCs.
     - id: plugin-inventory

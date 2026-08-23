@@ -93,7 +93,11 @@ afterEach(async () => {
 /** Write a two-row cordis.yml (webserver + chooser), then boot it through the real Loader. */
 async function loadComposition(
   bindHost: '127.0.0.1' | '0.0.0.0',
-  options: { failSurface?: boolean; launchEnvironment?: LaunchEnvironmentSnapshot } = {},
+  options: {
+    failSurface?: boolean
+    launchEnvironment?: LaunchEnvironmentSnapshot
+    chooserConfigLines?: string[]
+  } = {},
 ): Promise<{ ctx: Context; configPath: string }> {
   root = await mkdtemp(join(tmpdir(), 'dsh-directory-picker-auto-'))
   const configPath = join(root, 'cordis.yml')
@@ -103,6 +107,7 @@ async function loadComposition(
     `    host: '${bindHost}'`,
     '    port: 0',
     `- name: '${AUTO}'`,
+    ...options.chooserConfigLines ?? [],
     '',
   ].join('\n'))
 
@@ -245,6 +250,34 @@ describe('real Loader composition', () => {
     expect(entryNames(ctx)).not.toContain(NATIVE_SURFACE)
     const picker = ctx.get('directoryPicker') as DirectoryPicker
     expect(picker.capability().kind).toBe('browse')
+  })
+
+  it('pin browse mounts the browse pair even on an attended loopback host', { timeout: 60_000 }, async () => {
+    // Attended facts would resolve native; the pin must win without sampling.
+    stubAttendedHost()
+    const { ctx } = await loadComposition('127.0.0.1', {
+      chooserConfigLines: ['  config:', "    pin: 'browse'"],
+    })
+
+    expect(entryNames(ctx)).toContain(BROWSE)
+    expect(entryNames(ctx)).toContain(BROWSE_SURFACE)
+    expect(entryNames(ctx)).not.toContain(NATIVE)
+    expect(entryNames(ctx)).not.toContain(NATIVE_SURFACE)
+    const picker = ctx.get('directoryPicker') as DirectoryPicker
+    expect(picker.capability().kind).toBe('browse')
+  })
+
+  it('pin native mounts the native pair even for an unattended all-interfaces bind', { timeout: 60_000 }, async () => {
+    // No display stub: the resolution alone would answer browse on this bind.
+    const { ctx } = await loadComposition('0.0.0.0', {
+      chooserConfigLines: ['  config:', "    pin: 'native'"],
+    })
+
+    expect(entryNames(ctx)).toContain(NATIVE)
+    expect(entryNames(ctx)).toContain(NATIVE_SURFACE)
+    expect(entryNames(ctx)).not.toContain(BROWSE)
+    const picker = ctx.get('directoryPicker') as DirectoryPicker
+    expect(picker.capability().kind).toBe('native')
   })
 
   it('mounts the browse backend for an all-interfaces bind even on an attended host', { timeout: 60_000 }, async () => {

@@ -6,8 +6,9 @@
  * pair: the Host backend serving the seam capability and the client surface
  * occupying ui-workspace's directory-flow holes. Both arrive as ordinary
  * entries, so the surface is discovered exactly as a config-row's would be
- * and one resolved choice still swaps both faces; pinning an interaction
- * remains composing that pair directly instead of this row.
+ * and one resolved choice still swaps both faces; pinning an interaction is
+ * either composing that pair directly or setting this row's `pin` config
+ * (the web app feeds it through `--directory-picker`).
  * @module @deepseek-ai/dsh-host-directory-picker-auto
  */
 
@@ -16,6 +17,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { launchedThroughSsh, launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
+import z from '@deepseek-ai/schemastery'
 import { canExecute, hasLinuxChooserBinary } from './probe.ts'
 import type { DirectoryPickerBackendKind } from './resolve.ts'
 import { resolveDirectoryPickerBackend } from './resolve.ts'
@@ -28,6 +30,24 @@ export { resolveDirectoryPickerBackend } from './resolve.ts'
 export const name = 'directory-picker-auto'
 /** Required services: the effective bind host (`webServer`) and the entry tree the backend mounts into (`loader`). */
 export const inject = ['webServer', 'loader']
+
+/** Optional composition config. */
+export interface Config {
+  /**
+   * Pin the interaction instead of resolving it from host facts: `native`
+   * mounts the OS-dialog pair, `browse` the in-app browser pair, and an
+   * absent value keeps the boot-time resolution. A deployment serving
+   * operator surfaces the boot facts cannot see — one server reached by both
+   * a local browser and remote phones, for example — pins from its launch
+   * flags; the web app feeds this field through `--directory-picker`.
+   */
+  pin?: DirectoryPickerBackendKind
+}
+
+/** Schemastery validation for {@link Config}. */
+export const Config: z<Config> = z.object({
+  pin: z.union(['native', 'browse']),
+})
 
 /**
  * Host backend package per resolved kind — fixed composition vocabulary, not a
@@ -53,14 +73,16 @@ export const SURFACE_PACKAGES: Record<DirectoryPickerBackendKind, string> = {
 }
 
 /**
- * Resolve the interaction from one boot-time sample and mount its backend and
- * surface as Loader entries; the effect's disposer removes both entries and
+ * Mount the interaction named by the `pin` config, or resolve it from one
+ * boot-time sample when unpinned; either way the chosen backend and surface
+ * land as Loader entries and the effect's disposer removes both entries and
  * joins their fibers' teardown, so unloading this plugin returns only after
  * both faces of the mounted interaction (and their dependents) quiesced.
  * @param ctx - cordis context carrying the injected `webServer` and `loader`.
+ * @param config - the row's validated {@link Config}.
  */
-export async function apply(ctx: Context): Promise<void> {
-  const backend = resolveDirectoryPickerBackend({
+export async function apply(ctx: Context, config: Config): Promise<void> {
+  const backend: DirectoryPickerBackendKind = config.pin ?? resolveDirectoryPickerBackend({
     bindHost: ctx.webServer.host,
     platform: process.platform,
     ssh: launchedThroughSsh(launchEnvironmentOf(ctx)),
