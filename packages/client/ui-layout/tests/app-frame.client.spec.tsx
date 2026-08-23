@@ -344,6 +344,32 @@ describe('AppFrame normal width concessions', () => {
     expect(tracks(frame)[0]).toBe(280)
     expect(instance.getSnapshot().layoutInfo.sidebar).toBe(0)
   })
+
+  it('renders the narrow sidebar as an overlay drawer and dismisses it from the scrim', () => {
+    frameWidth = 980
+    const { frame, instance, sidebarOwner } = mountFrame()
+    act(() => { instance.actions.toggleSidebar() })
+    expect(frame.dataset.sidebarDrawer).toBe('true')
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(sidebarOwner()).toEqual({ collapsed: false, width: 280 })
+    const backdrop = frame.querySelector<HTMLElement>('[data-sidebar-drawer-backdrop]')
+    expect(backdrop).not.toBeNull()
+    act(() => { backdrop?.click() })
+    expect(frame.dataset.sidebarDrawer).toBeUndefined()
+    expect(instance.getSnapshot().layoutInfo.narrowExpanded).toBe(false)
+  })
+
+  it('dismisses the narrow drawer when the session or main panel changes', () => {
+    frameWidth = 980
+    const { frame, instance, rerenderFrame } = mountFrame()
+    act(() => { instance.actions.toggleSidebar() })
+    expect(frame.dataset.sidebarDrawer).toBe('true')
+    selectedSession = 's-next' as SessionId
+    rerenderFrame()
+    expect(frame.dataset.sidebarDrawer).toBeUndefined()
+    act(() => { instance.actions.toggleSidebar(); instance.actions.selectPanel('panel-a' as MainPanelId) })
+    expect(frame.dataset.sidebarDrawer).toBeUndefined()
+  })
 })
 
 describe('AppFrame right panel presentation', () => {

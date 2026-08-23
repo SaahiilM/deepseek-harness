@@ -154,3 +154,47 @@
 .overlayLayer > * {
   pointer-events: auto;
 }
+
+/* Drawer mode (narrow viewports, AppFrame sets data-sidebar-drawer): the
+   sidebar grid track is zeroed and the column pins over the full-width
+   center as an overlay; the scrim tap target closes it. */
+.sidebarCol[data-drawer-open] {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 15; /* below .overlayLayer (20), above center content */
+  border-right: 1px solid var(--dsw-alias-border-l2);
+  box-shadow: var(--dsw-shadow-lv3);
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  background: var(--dsw-alias-bg-mask-3);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Entrance rides the same curve as the wide track transitions. */
+  @keyframes dsh-drawer-in {
+    from {
+      transform: translateX(-24px);
+      opacity: 0;
+    }
+  }
+
+  .sidebarCol[data-drawer-open] {
+    animation: dsh-drawer-in var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+  }
+
+  @keyframes dsh-scrim-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .backdrop {
+    animation: dsh-scrim-in var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+  }
+}

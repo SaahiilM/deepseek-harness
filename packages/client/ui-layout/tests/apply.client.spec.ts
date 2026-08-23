@@ -104,6 +104,10 @@ describe('ui-layout client apply', () => {
     expect(() => { layout.selectPanel('missing' as MainPanelId) }).toThrow('main panel "missing" is not registered')
     layout.toggleSidebar()
     expect(instance.getSnapshot().layoutInfo.sidebar).toBe(0)
+    instance.actions.setViewportWidth(980)
+    instance.actions.toggleSidebar()
+    instance.actions.closeNarrowSidebar()
+    expect(instance.getSnapshot().layoutInfo.narrowExpanded).toBe(false)
     const host = rendererHost()
     expect(host.storeOf(entry, undefined)).toBe(instance)
     const panelInfo = host.root.getSnapshot().hooks.panelInfo!

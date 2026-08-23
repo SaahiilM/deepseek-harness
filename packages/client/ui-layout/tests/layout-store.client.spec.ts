@@ -75,6 +75,15 @@ describe('createLayoutStore', () => {
     actions.setViewportWidth(980)
     expect(store.getSnapshot().layoutInfo.narrowExpanded).toBe(false)
   })
+
+  it('dismisses the narrow drawer without changing the sidebar preference', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.setSidebar(400)
+    actions.setViewportWidth(980)
+    actions.toggleSidebar()
+    actions.closeNarrowSidebar()
+    expect(store.getSnapshot().layoutInfo).toMatchObject({ sidebar: 400, narrowExpanded: false })
+  })
 })
 
 describe('main panel selection', () => {

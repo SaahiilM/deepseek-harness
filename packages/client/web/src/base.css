@@ -58,3 +58,16 @@ select,
 textarea {
   font-family: inherit;
 }
+
+/* Touch input quality-of-life: drop the tap flash and the double-tap-zoom
+   delay on interactive controls (viewport-fit=cover is set in apps/web
+   index.html so env() insets resolve on notched devices). */
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+[role='button'] {
+  touch-action: manipulation;
+}

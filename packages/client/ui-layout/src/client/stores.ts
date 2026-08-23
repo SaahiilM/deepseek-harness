@@ -64,6 +64,8 @@ type LayoutActions = {
   setRightbar: (draft: LayoutState, px: number) => void
   openRightbar: (draft: LayoutState, track: boolean, fullscreen: boolean) => void
   closeRightbar: (draft: LayoutState) => void
+  /** Dismiss an expanded sidebar drawer without changing its width preference. */
+  closeNarrowSidebar: (draft: LayoutState) => void
 }
 
 /**
@@ -139,6 +141,9 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
         d.layoutInfo.rightbarShown = false
         d.layoutInfo.rightbarTrack = false
         d.layoutInfo.rightbarFullscreen = false
+      },
+      closeNarrowSidebar: (d) => {
+        d.layoutInfo.narrowExpanded = false
       },
     },
   })
