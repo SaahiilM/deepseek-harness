@@ -61,6 +61,18 @@ final class ServerController: NSObject, @unchecked Sendable {
     /// launch can adopt it after the app quit but the server stayed up.
     static let lastOwnedPortKey = "DSHDesktopLastOwnedPort"
 
+    /// Setting this environment variable disables adoption: `start()` always
+    /// spawns an owned server from the resolved checkout, even when a live
+    /// harness server answers on a candidate port. Use it to run the app
+    /// against a fresh owned server while another harness server stays up on
+    /// the default port.
+    static let spawnOwnEnvironmentKey = "DSH_DESKTOP_SPAWN_OWN"
+
+    /// UserDefaults mirror of `spawnOwnEnvironmentKey`, same semantics: a
+    /// true value disables adoption. The defaults channel reaches GUI
+    /// launches reliably, which `--env` delivery through `open` may not.
+    static let spawnOwnDefaultsKey = "DSHDesktopSpawnOwn"
+
     // MARK: - Lifecycle
 
     func start() {
@@ -86,11 +98,14 @@ final class ServerController: NSObject, @unchecked Sendable {
 
         probeTask = Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
-            if let adopted = await Self.firstHarnessServer(among: candidates) {
+            let adoptionDisabled = ProcessInfo.processInfo.environment[Self.spawnOwnEnvironmentKey] != nil
+                || defaults.bool(forKey: Self.spawnOwnDefaultsKey)
+            if !adoptionDisabled, let adopted = await Self.firstHarnessServer(among: candidates) {
                 DispatchQueue.main.async { self.attach(url: adopted, repoRoot: repo) }
                 return
             }
-            // Nothing to adopt: spawn an owned server from the resolved root.
+            // Nothing to adopt, or adoption is disabled by the spawn-own env var:
+            // spawn an owned server from the resolved root.
             guard let node = NodeLocator.locate(
                 environment: ProcessInfo.processInfo.environment,
                 repoRoot: repo) else {
