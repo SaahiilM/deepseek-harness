@@ -1,5 +1,7 @@
 # Agent Memory
 
+English | [中文](README.zh.md)
+
 Durable, per-session notes written **by agents, for agents** working on the
 `desktop-app` branch. Project-level decisions live in
 [`../PROJECT_MEMORY.md`](../PROJECT_MEMORY.md); this directory records *what was

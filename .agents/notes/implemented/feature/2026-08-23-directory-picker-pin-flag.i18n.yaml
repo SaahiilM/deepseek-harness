@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-23-directory-picker-pin-flag.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-23-directory-picker-pin-flag.md
-2026-08-23-directory-picker-pin-flag.md: 81be7022a55bbf626f82ac07df89016454b52020
-2026-08-23-directory-picker-pin-flag.zh.md: 676352ad5e7472b4d53a8d13a7d9754273190dfd
+/agent-note-directory-picker-pins-the-directory-picker-interaction-from-the-launch-flags:
+  en: 3faee4e73c185539
+  zh: 6275aa020408efa3
+/agent-note-directory-picker-pins-the-directory-picker-interaction-from-the-launch-flags/problem:
+  en: 8517a386a45482f1
+  zh: dee75a2a77a2b46f
+/agent-note-directory-picker-pins-the-directory-picker-interaction-from-the-launch-flags/decision:
+  en: e2542a3a535f24da
+  zh: d6bff2d0300233bd
+/agent-note-directory-picker-pins-the-directory-picker-interaction-from-the-launch-flags/alternatives-considered:
+  en: 7156e9b54f8ee102
+  zh: 6911f50121c5892c
+/agent-note-directory-picker-pins-the-directory-picker-interaction-from-the-launch-flags/consequences:
+  en: b03a8e1425858d69
+  zh: 97dfbd62231521ab

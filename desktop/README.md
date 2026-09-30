@@ -1,5 +1,7 @@
 # DeepSeek Harness — Desktop App
 
+English | [中文](README.zh.md)
+
 A native macOS shell that turns the DeepSeek Harness web UI into a desktop
 application, comparable to OpenAI's Codex app: one window, a dock icon, menus,
 and an app-managed local agent server. Works on Intel and Apple Silicon.

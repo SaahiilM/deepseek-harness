@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-23-narrow-sidebar-overlay-drawer.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-23-narrow-sidebar-overlay-drawer.md
-2026-08-23-narrow-sidebar-overlay-drawer.md: 0f00e257a023f1e7c33daa2642ccd2a274b30c6c
-2026-08-23-narrow-sidebar-overlay-drawer.zh.md: a5de067a359c72e13ccd746894957f42dd3c8cba
+/agent-note-narrow-viewport-sidebar-as-an-overlay-drawer:
+  en: 300a326991af1909
+  zh: f0edc0b7a1c2bd78
+/agent-note-narrow-viewport-sidebar-as-an-overlay-drawer/problem:
+  en: 1f3b5532dd3bd436
+  zh: d2ef5c831a9292a1
+/agent-note-narrow-viewport-sidebar-as-an-overlay-drawer/decision:
+  en: 07ce8240fd5865de
+  zh: 3bf10ce4d261a7f3
+/agent-note-narrow-viewport-sidebar-as-an-overlay-drawer/alternatives-considered:
+  en: 07a96fd993f98bfb
+  zh: a84c482c7afdf8f8
+/agent-note-narrow-viewport-sidebar-as-an-overlay-drawer/consequences:
+  en: 354435e37b703ff3
+  zh: b046238fae6ce0e4

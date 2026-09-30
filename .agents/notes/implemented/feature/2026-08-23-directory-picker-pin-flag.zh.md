@@ -4,11 +4,11 @@ Status: implemented
 
 [English](2026-08-23-directory-picker-pin-flag.md) | 中文
 
-> 范围：`dsh --profile web` 的 flag 家族与 `dsh-host-directory-picker-auto` 的组合 config。能力接缝本身、两个后端、以及 `-auto` 的解析函数均未改变；本文记录的是[自适应默认](2026-07-29-directory-picker-adaptive-default.zh.md)中作为"部署需要强制后端时再引入"而预留的 pin 通道的落地。
+> 范围：`dsh --profile web` 的 flag 家族与 `dsh-host-directory-picker-auto` 的组合 config。能力接缝本身、两个后端、以及 `-auto` 的解析函数均未改变；本文记录的是[自适应默认](2026-07-29-directory-picker-adaptive-default.md)中作为"部署需要强制后端时再引入"而预留的 pin 通道的落地。
 
 ## 问题
 
-`-auto` 从启动事实（回环绑定、无 SSH、有显示会话）解析交互，这对"操作者在宿主机前"的部署是正确的。但一种新部署形态出现了：同一个服务器同时服务本机浏览器与通过配对门进来的远程手机。启动事实看不到客户端表面，于是 `native` 被解析并挂载——远程表面上的"新建工作区"驱动 `host.pickDirectory`，把 OS 对话框开在了无人看到的宿主机屏幕上，远程操作者只能面对一个永远忙碌的流程。[按连接自适应](../architecture/2026-07-28-directory-picker-capability-seam.zh.md)仍是明确的 deferred 项；部署需要的是现在就能强制后端而不改 yml。
+`-auto` 从启动事实（回环绑定、无 SSH、有显示会话）解析交互，这对"操作者在宿主机前"的部署是正确的。但一种新部署形态出现了：同一个服务器同时服务本机浏览器与通过配对门进来的远程手机。启动事实看不到客户端表面，于是 `native` 被解析并挂载——远程表面上的"新建工作区"驱动 `host.pickDirectory`，把 OS 对话框开在了无人看到的宿主机屏幕上，远程操作者只能面对一个永远忙碌的流程。[按连接自适应](../architecture/2026-07-28-directory-picker-capability-seam.md)仍是明确的 deferred 项；部署需要的是现在就能强制后端而不改 yml。
 
 ## 决策
 

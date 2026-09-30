@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-18-native-shell-browser-auth.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-18-native-shell-browser-auth.md
-2026-09-18-native-shell-browser-auth.md: fdcc4b87401df3202a9fbadfd194db411f44e0c1
-2026-09-18-native-shell-browser-auth.zh.md: 52675eb3198257b75ba8024461ba8f39397a9694
+/agent-note-use-the-tokenized-web-url-in-the-native-shell:
+  en: 0fab9c1b281d7377
+  zh: 0e20845cf30f0780
+/agent-note-use-the-tokenized-web-url-in-the-native-shell/problem:
+  en: 8f4c790000785cd1
+  zh: f94b46106ab61bbb
+/agent-note-use-the-tokenized-web-url-in-the-native-shell/decision:
+  en: a3bcf58747d2adde
+  zh: 0cd2a3acfc1c2ae0
+/agent-note-use-the-tokenized-web-url-in-the-native-shell/alternatives-considered:
+  en: d8ad48f7769c9a39
+  zh: ca9a9fe17119e7e6
+/agent-note-use-the-tokenized-web-url-in-the-native-shell/consequences:
+  en: a58ace6a0aae2a47
+  zh: ded282bd36602ed3

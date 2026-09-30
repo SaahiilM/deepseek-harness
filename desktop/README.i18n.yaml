@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write desktop/README.md
+/deepseek-harness-desktop-app:
+  en: 836de9324e924923
+  zh: 382a162eb2c8c316
+/deepseek-harness-desktop-app/quick-start:
+  en: c1382a0358217925
+  zh: 39e55377fe03da09
+/deepseek-harness-desktop-app/architecture:
+  en: 604a35fcf8d7c824
+  zh: 5a9e0350bdadf69f
+/deepseek-harness-desktop-app/using-your-phone-lan-pairing-t3code-style:
+  en: 6041153023e433f6
+  zh: 3c93a295e70d173d
+/deepseek-harness-desktop-app/two-packaging-modes:
+  en: 7c6c513c81d78037
+  zh: 3f4155dfae74a218
+/deepseek-harness-desktop-app/how-it-works:
+  en: f88035c6544cfe6d
+  zh: 836059c28fc2d302
+/deepseek-harness-desktop-app/desktop-affordances-codex-bb-t3code-patterns:
+  en: 68ddeb8ee4bc1f12
+  zh: 81d53c7005a98466
+/deepseek-harness-desktop-app/distribution:
+  en: 02465f20af799dfd
+  zh: 44c9eba4ae40e359
+/deepseek-harness-desktop-app/staying-current-with-upstream:
+  en: 3b82592e9e3a8fd7
+  zh: 817fed5807a642e8
+/deepseek-harness-desktop-app/agent-memory:
+  en: e2f45ba13fcf1f43
+  zh: ed3bf71635495cab
