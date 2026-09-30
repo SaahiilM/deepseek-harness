@@ -94,8 +94,10 @@ engines scan.
    Launch with `DSH_DESKTOP_SPAWN_OWN=1` to skip adoption and always spawn an
    owned server — for running the app against a fresh checkout while another
    harness server stays up on the default port.
-3. It waits for HTTP readiness, loads the UI in a `WKWebView`, and confines
-   navigation to loopback — external links open in your default browser.
+3. It waits for HTTP readiness, captures the tokenized `dsh web` URL, exchanges
+   it for the Web Host cookie, loads the authenticated UI in a `WKWebView`, and
+   confines navigation to loopback — external links open in your default
+   browser.
 4. Quitting the app terminates only an *owned* server. Server output lands in
    `~/Library/Application Support/DeepSeek Harness/server.log`.
 

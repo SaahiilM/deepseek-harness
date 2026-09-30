@@ -49,6 +49,9 @@ final class ServerController: NSObject, @unchecked Sendable {
     private let defaults: UserDefaults
     private var process: Process?
     private var probeTask: Task<Void, Never>?
+    private let outputLock = NSLock()
+    private var outputRemainder = ""
+    private var authenticatedURL: URL?
 
     init(logStore: ServerLogStore = ServerLogStore(), defaults: UserDefaults = .standard) {
         self.logStore = logStore
@@ -157,6 +160,10 @@ final class ServerController: NSObject, @unchecked Sendable {
         port = pickedPort
         mode = .owned
         defaults.set(pickedPort, forKey: Self.lastOwnedPortKey)
+        outputLock.lock()
+        outputRemainder = ""
+        authenticatedURL = nil
+        outputLock.unlock()
 
         let args = ["--import", "tsx/esm",
                     RepoLocator.markerPath, "web",
@@ -175,12 +182,13 @@ final class ServerController: NSObject, @unchecked Sendable {
         proc.environment = childEnvironment()
         proc.standardOutput = Pipe()
         proc.standardError = Pipe()
+        let captureOutput: (FileHandle) -> Void = { [weak self] handle in
+            let data = handle.availableData
+            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
+            self?.recordServerOutput(text)
+        }
         [proc.standardOutput, proc.standardError].forEach { pipe in
-            (pipe as? Pipe)?.fileHandleForReading.readabilityHandler = { [logStore] handle in
-                let data = handle.availableData
-                guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
-                logStore.append(text)
-            }
+            (pipe as? Pipe)?.fileHandleForReading.readabilityHandler = captureOutput
         }
 
         proc.terminationHandler = { [weak self] proc in
@@ -210,15 +218,19 @@ final class ServerController: NSObject, @unchecked Sendable {
         probeTask = Task.detached(priority: .userInitiated) { [weak self] in
             let ready = await ReadinessProbe.waitUntilReady(url: url, timeout: Self.readinessTimeout)
             guard !Task.isCancelled, let self else { return }
+            let authenticatedURL = ready
+                ? await self.waitForAuthenticatedURL(timeout: 10)
+                : nil
             DispatchQueue.main.async {
-                self.finishStartup(ready: ready, url: url, process: proc)
+                self.finishStartup(ready: ready, authenticatedURL: authenticatedURL, fallbackURL: url, process: proc)
             }
         }
     }
 
-    private func finishStartup(ready: Bool, url: URL, process: Process) {
+    private func finishStartup(ready: Bool, authenticatedURL: URL?, fallbackURL: URL, process: Process) {
         switch (ready, process.isRunning) {
         case (true, true):
+            let url = authenticatedURL ?? fallbackURL
             transition(.running(url))
         case (_, false):
             transition(.failed(
@@ -255,6 +267,51 @@ final class ServerController: NSObject, @unchecked Sendable {
             ?? "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         env["DSH_DESKTOP_SHELL"] = "1"
         return env
+    }
+
+    /// Extract the browser URL printed by the Web launcher.
+    static func authenticatedURL(in text: String) -> URL? {
+        for rawLine in text.components(separatedBy: .newlines).reversed() {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            let prefix = "dsh web: "
+            guard line.hasPrefix(prefix),
+                  let url = URL(string: String(line.dropFirst(prefix.count))),
+                  let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+                  queryItems.contains(where: { item in
+                      item.name == "token" && !(item.value?.isEmpty ?? true)
+                  }) else { continue }
+            return url
+        }
+        return nil
+    }
+
+    private func recordServerOutput(_ text: String) {
+        logStore.append(text)
+        outputLock.lock()
+        outputRemainder += text
+        let lines = outputRemainder.components(separatedBy: "\n")
+        outputRemainder = lines.last ?? ""
+        for line in lines.dropLast() {
+            if let url = Self.authenticatedURL(in: line) {
+                authenticatedURL = url
+            }
+        }
+        outputLock.unlock()
+    }
+
+    private func currentAuthenticatedURL() -> URL? {
+        outputLock.lock(); defer { outputLock.unlock() }
+        return authenticatedURL ?? Self.authenticatedURL(in: outputRemainder)
+    }
+
+    private func waitForAuthenticatedURL(timeout: TimeInterval) async -> URL? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if Task.isCancelled { return nil }
+            if let url = currentAuthenticatedURL() { return url }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        return currentAuthenticatedURL()
     }
 
     private func transition(_ newState: ServerState) {

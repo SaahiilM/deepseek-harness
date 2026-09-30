@@ -149,6 +149,19 @@ func testServerProbeFingerprint() {
         "probe: error envelope is not an identification")
 }
 
+// MARK: - Browser authentication URL
+
+func testAuthenticatedURLParsing() {
+    let output = "startup\ndsh web: http://127.0.0.1:63282/?token=launch-secret\n"
+    expectEqual(
+        ServerController.authenticatedURL(in: output)?.absoluteString,
+        "http://127.0.0.1:63282/?token=launch-secret",
+        "auth: captures the tokenized Web URL")
+    expectTrue(
+        ServerController.authenticatedURL(in: "dsh web: http://127.0.0.1:63282/") == nil,
+        "auth: rejects a bare Web URL")
+}
+
 // MARK: - ApprovalStream decoding
 
 func testApprovalStreamParsing() {
@@ -287,6 +300,7 @@ testServerLogStore()
 testNodeVersionRules()
 testRepoMarkerRules()
 testServerProbeFingerprint()
+testAuthenticatedURLParsing()
 testApprovalStreamParsing()
 testEmbeddedRuntimePriority()
 testRemoteAccessHelpers()
