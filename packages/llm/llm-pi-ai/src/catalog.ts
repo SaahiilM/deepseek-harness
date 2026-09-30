@@ -801,6 +801,8 @@ function resolveModelCompat(
 export interface RouteCatalog {
   /** The materialized models in configuration order. */
   models: readonly Model<Api>[]
+  /** Model ids whose OpenRouter route is explicitly marked free. */
+  freeModels: ReadonlySet<string>
   /** Models that cannot be resolved, retained as diagnostics during stored-config reads. */
   modelErrors: ReadonlyMap<string, string>
   /**
@@ -930,6 +932,7 @@ export function resolveRouteModels(
     }
   }
   const models: Model<Api>[] = []
+  const freeModels = new Set<string>()
   for (const entry of entries) {
     let model: Model<Api>
     try {
@@ -940,6 +943,18 @@ export function resolveRouteModels(
       continue
     }
     models.push(model)
+    // Only installed-catalog models carry real cost metadata: hand-declared
+    // routes fall back to NO_COST, so a cost-based heuristic would mark every
+    // hand-declared model free. The `:free` suffix convention still applies to
+    // hand-declared OpenRouter entries, while catalog routes are free when their
+    // stored cost is zero on every leg (includes `openrouter/free`).
+    const base = defaults.get(entry.id)
+    const pricedFree = base?.cost !== undefined &&
+      base.cost.input === 0 && base.cost.output === 0 &&
+      base.cost.cacheRead === 0 && base.cost.cacheWrite === 0
+    if (provider === 'openrouter' && (entry.id.endsWith(':free') || pricedFree)) {
+      freeModels.add(entry.id)
+    }
   }
   // A later duplicate invalidates the id, including an earlier resolved entry.
   const serviceableModels = models.filter(model => !modelErrors.has(model.id))
@@ -953,5 +968,5 @@ export function resolveRouteModels(
     invalid(provider, `sets compat "${field}", but no model on the route speaks a protocol that takes it;`
       + ` it exists on ${takers.join(', ')}`)
   }
-  return { models: serviceableModels, configuredMaxTokens, modelErrors }
+  return { models: serviceableModels, freeModels, configuredMaxTokens, modelErrors }
 }

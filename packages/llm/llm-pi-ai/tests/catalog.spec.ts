@@ -76,6 +76,40 @@ async function harness(config: LlmPiAi.Config): Promise<Context> {
 }
 
 describe('hand-declared providers', () => {
+  it('marks every free OpenRouter route, including the router alias and zero-cost coding models', async () => {
+    const server = await mockServer([])
+    const ctx = await harness({
+      providers: {
+        openrouter: {
+          api: 'openai-completions',
+          baseURL: `${server.url}/v1`,
+          models: [
+            { id: 'paid-model', name: 'Paid Model' },
+            { id: 'openrouter/free', name: 'OpenRouter Free' },
+            { id: 'free-model:free', name: 'Free Model' },
+            { id: 'zero-cost-coding-model', name: 'Zero Cost Coding Model' },
+          ],
+        },
+      },
+    })
+
+    await expect(ctx.llm.listModels('openrouter')).resolves.toEqual([
+      { provider: 'openrouter', id: 'paid-model', name: 'Paid Model', inputModalities: ['text'] },
+      {
+        provider: 'openrouter', id: 'openrouter/free', name: 'OpenRouter Free', free: true,
+        inputModalities: ['text', 'image'],
+      },
+      {
+        provider: 'openrouter', id: 'free-model:free', name: 'Free Model', free: true,
+        inputModalities: ['text'],
+      },
+      {
+        provider: 'openrouter', id: 'zero-cost-coding-model', name: 'Zero Cost Coding Model',
+        inputModalities: ['text'],
+      },
+    ])
+  })
+
   it('serves a route pi-ai has never heard of from its own declaration', async () => {
     const server = await mockServer([{ events: textEvents }])
     const ctx = await harness(gateway(`${server.url}/v1`))

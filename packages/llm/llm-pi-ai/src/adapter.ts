@@ -281,6 +281,7 @@ export class PiAiAdapter extends LlmAdapter {
         provider,
         id: model.id,
         name: model.name,
+        ...snapshot.profiles.get(provider)?.freeModels.has(model.id) === true ? { free: true as const } : {},
         inputModalities: [...model.input],
       }))
     })

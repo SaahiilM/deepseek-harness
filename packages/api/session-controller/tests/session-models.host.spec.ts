@@ -428,6 +428,42 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
+  it('shows only free OpenRouter models and falls back a paid OpenRouter default', async () => {
+    const { ctx } = await harness()
+    ctx.llm.registerAdapter(['openrouter'], new CatalogAdapter('OpenRouter', [
+      { provider: 'openrouter', id: 'paid-model', name: 'Paid Model' },
+      { provider: 'openrouter', id: 'free-model:free', name: 'Free Model', free: true },
+    ]))
+
+    const catalog = await buildModelCatalog(ctx, { provider: 'openrouter', model: 'paid-model' })
+
+    expect(catalog.groups).toContainEqual({
+      id: 'openrouter',
+      name: 'OpenRouter',
+      models: [{ id: 'free-model:free', name: 'Free Model' }],
+    })
+    expect(catalog.groups.find(group => group.id === 'openrouter')?.models)
+      .not.toContainEqual(expect.objectContaining({ id: 'paid-model' }))
+    expect(catalog.default).toEqual({ provider: 'openrouter', model: 'free-model:free' })
+    await ctx.fiber.dispose()
+  })
+
+  it('shows the openrouter/free router alias and zero-cost coding models', async () => {
+    const { ctx } = await harness()
+    ctx.llm.registerAdapter(['openrouter'], new CatalogAdapter('OpenRouter', [
+      { provider: 'openrouter', id: 'paid-model', name: 'Paid Model' },
+      { provider: 'openrouter', id: 'openrouter/free', name: 'OpenRouter Free', free: true },
+      { provider: 'openrouter', id: 'zero-cost-coding-model', name: 'Zero Cost Coding Model', free: true },
+    ]))
+
+    const catalog = await buildModelCatalog(ctx, { provider: 'openrouter', model: 'paid-model' })
+
+    const models = catalog.groups.find(group => group.id === 'openrouter')?.models ?? []
+    expect(models.map(model => model.id)).toEqual(['openrouter/free', 'zero-cost-coding-model'])
+    expect(catalog.default).toEqual({ provider: 'openrouter', model: 'openrouter/free' })
+    await ctx.fiber.dispose()
+  })
+
   it('accepts an advisory-unlisted model, rejects an unavailable provider, and switches only after the next assembly', async () => {
     const { ctx, agent, sessionId } = await harness()
     const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }), cwd: '/tmp' })

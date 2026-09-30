@@ -7,6 +7,9 @@ import type {
   ModelSelection,
 } from './types.ts'
 
+/** OpenRouter is the only provider whose free-only picker policy applies. */
+const OPENROUTER_PROVIDER = 'openrouter'
+
 /**
  * Build the browser model catalog without requiring a Session.
  * @param ctx - Host context carrying the live LLM registry.
@@ -21,7 +24,10 @@ export async function buildModelCatalog(
   const catalog = await Promise.all(providers.map(async (provider) => {
     try {
       const models = await ctx.llm.listModels(provider.id)
-      const entries = await Promise.all(models.map(async (model) => {
+      const visibleModels = provider.id === OPENROUTER_PROVIDER
+        ? models.filter(model => model.free === true)
+        : models
+      const entries = await Promise.all(visibleModels.map(async (model) => {
         const resolved = await ctx.llm.resolveModelInfo(provider.id, model.id)
         const reasoning: ModelReasoning | undefined = resolved.reasoning === undefined
           ? undefined
@@ -57,11 +63,24 @@ export async function buildModelCatalog(
       }
     }
   }))
+  const groups = catalog.flatMap(item => item.kind === 'group' ? [item.group] : [])
+    .filter(group => group.models.length > 0)
+  const openrouter = groups.find(group => group.id === OPENROUTER_PROVIDER)
+  const openrouterFallback = openrouter?.models.at(0)?.id
+  const defaultInCatalog = groups.some(group => group.id === defaultSelection.provider
+    && group.models.some(model => model.id === defaultSelection.model))
+  const effectiveDefault = defaultSelection.provider !== OPENROUTER_PROVIDER
+    || defaultInCatalog
+    || openrouterFallback === undefined
+    ? defaultSelection
+    : {
+      provider: OPENROUTER_PROVIDER,
+      model: openrouterFallback,
+    }
   return {
-    default: { ...defaultSelection },
+    default: { ...effectiveDefault },
     routableProviders: providers.map(provider => provider.id),
-    groups: catalog.flatMap(item => item.kind === 'group' ? [item.group] : [])
-      .filter(group => group.models.length > 0),
+    groups,
     failures: catalog.flatMap(item => item.kind === 'failure' ? [item.failure] : []),
   }
 }
